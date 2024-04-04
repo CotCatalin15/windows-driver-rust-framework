@@ -1,0 +1,25 @@
+[package]
+name = "wdrf"
+version = "0.1.0"
+edition = "2021"
+repository.workspace = true
+#readme = ""
+#license = ""
+
+[profile.dev]
+panic = "abort"
+lto = true
+
+[profile.release]
+panic = "abort"
+lto = true
+
+
+[dependencies]
+wdk-sys.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+wdk-sys = { version = "0.2.0", features = ["test-stubs"] }
+
+[features]

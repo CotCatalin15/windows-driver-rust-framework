@@ -1,0 +1,13 @@
+[package]
+name = "wdrf-macros"
+version = "0.1.0"
+edition.workspace = true
+repository.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+wdrf.workspace = true
+syn = "2.0.57"
+quote = "=0.6.9"

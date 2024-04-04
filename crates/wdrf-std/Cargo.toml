@@ -1,0 +1,31 @@
+[package]
+name = "wdrf-std"
+version = "0.1.0"
+edition.workspace = true
+repository.workspace = true
+
+[profile.dev]
+panic = "abort"
+lto = true
+
+[profile.release]
+panic = "abort"
+lto = true
+
+
+[dependencies]
+wdk-sys.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+bitflags.workspace = true
+
+[dev-dependencies]
+wdk-sys = { version = "0.2.0", features = ["test-stubs"] }
+
+[features]
+default = ["dev-features"]
+
+dev-features = ["full-sanity-checks"]
+
+full-sanity-checks = ["alloc-sanity"]
+alloc-sanity = []

@@ -1,0 +1,30 @@
+[package]
+name = "test-driver"
+version = "0.1.0"
+edition.workspace = true
+repository.workspace = true
+
+[dependencies]
+wchar = "0.11.0"
+wdk = "0.2.0"
+wdk-alloc = "0.2.0"
+wdk-panic = "0.2.0"
+wdk-sys = "0.2.0"
+wdrf.workspace = true
+anyhow.workspace = true
+
+[build-dependencies]
+wdk-build = "0.2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.wdk]
+
+[profile.dev]
+panic = "abort"
+lto = true      # optional setting to enable Link Time Optimizations
+
+[profile.release]
+panic = "abort"
+lto = true      # optional setting to enable Link Time Optimizations

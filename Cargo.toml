@@ -1,0 +1,27 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[profile.dev]
+panic = "abort"
+lto = true
+
+[profile.release]
+panic = "abort"
+lto = true
+
+[workspace.package]
+edition = "2021"
+repository = "https://github.com/CotCatalin15/windows-driver-rust-framework"
+#readme = ""
+#license = ""
+
+
+[workspace.dependencies]
+wdrf = { path = "crates/wdrf", version = "0.1.0" }
+wdrf-macros = { path = "crates/wdrf-macros", version = "0.1.0" }
+wdrf-std = { path = "crates/wdrf-std", version = "0.1.0" }
+wdk-sys = "0.2.0"
+anyhow = { version = "1.0.35", default-features = false }
+thiserror = { version = "1.0", package = "thiserror-core", default-features = false }
+bitflags = "2.5.0"
