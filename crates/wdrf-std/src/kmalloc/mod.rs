@@ -139,6 +139,8 @@ pub unsafe trait KernelAllocator {
 
 pub struct GlobalKernelAllocator<T: TaggedObject> {
     _phantom: PhantomData<T>,
+    #[cfg(test)]
+    fail_alloc: bool,
 }
 
 #[cfg(not(test))]
@@ -164,16 +166,13 @@ impl<T: TaggedObject> GlobalKernelAllocator<T> {
 }
 
 #[cfg(test)]
-static mut TEST_ALLOCATOR_FAIL_ALLOC: bool = false;
-
-#[cfg(test)]
 impl<T: TaggedObject> GlobalKernelAllocator<T> {
     #[inline]
     fn allocate_internal(&self, layout: TagLayout) -> Result<NonNull<[u8]>, AllocError> {
         extern crate std;
         unsafe {
             let size = layout.size();
-            let ptr = if TEST_ALLOCATOR_FAIL_ALLOC {
+            let ptr = if self.fail_alloc {
                 core::ptr::null_mut()
             } else {
                 std::alloc::alloc(layout.layout)
@@ -193,8 +192,8 @@ impl<T: TaggedObject> GlobalKernelAllocator<T> {
         std::alloc::dealloc(ptr.as_ptr(), layout.layout);
     }
 
-    pub fn fail_allocations(fail: bool) {
-        unsafe { TEST_ALLOCATOR_FAIL_ALLOC = fail };
+    pub fn fail_allocations(&mut self, fail: bool) {
+        self.fail_alloc = fail;
     }
 }
 
@@ -202,6 +201,8 @@ impl<T: TaggedObject> Default for GlobalKernelAllocator<T> {
     fn default() -> Self {
         Self {
             _phantom: PhantomData,
+            #[cfg(test)]
+            fail_alloc: false,
         }
     }
 }

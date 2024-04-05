@@ -6,4 +6,5 @@ extern crate alloc;
 
 pub mod boxed;
 pub mod kmalloc;
+pub mod sync;
 pub mod vec;

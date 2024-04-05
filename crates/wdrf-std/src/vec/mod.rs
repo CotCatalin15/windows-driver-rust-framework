@@ -51,9 +51,11 @@ mod test {
 
     #[test]
     fn test_fail_push() -> anyhow::Result<()> {
-        let mut v = Vec::create();
+        let mut alloc = GlobalKernelAllocator::<i32>::default();
+        alloc.fail_allocations(true);
 
-        GlobalKernelAllocator::<()>::fail_allocations(true);
+        let mut v = Vec::new_in(alloc);
+
         assert!(v.try_push(20).is_err());
         assert_eq!(v, []);
 

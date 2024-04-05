@@ -27,5 +27,6 @@ default = ["dev-features"]
 
 dev-features = ["full-sanity-checks"]
 
-full-sanity-checks = ["alloc-sanity"]
+full-sanity-checks = ["alloc-sanity", "irql-sanity"]
+irql-sanity = []
 alloc-sanity = []
