@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/*", "crates/wdrf-macros/wdrf-proc-macros"]
 resolver = "2"
 
 [profile.dev]

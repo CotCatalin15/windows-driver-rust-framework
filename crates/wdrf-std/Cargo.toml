@@ -15,6 +15,7 @@ lto = true
 
 [dependencies]
 wdk-sys.workspace = true
+wdrf-macros.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 bitflags.workspace = true
@@ -27,6 +28,7 @@ default = ["dev-features"]
 
 dev-features = ["full-sanity-checks"]
 
-full-sanity-checks = ["alloc-sanity", "irql-sanity"]
-irql-sanity = []
+full-sanity-checks = ["alloc-sanity", "irql-checks", "mutex-checks"]
+mutex-checks = []
+irql-checks = []
 alloc-sanity = []

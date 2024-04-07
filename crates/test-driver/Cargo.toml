@@ -5,13 +5,13 @@ edition.workspace = true
 repository.workspace = true
 
 [dependencies]
+wdrf-std.workspace = true
+wdrf.workspace = true
+anyhow.workspace = true
 wchar = "0.11.0"
 wdk = "0.2.0"
 wdk-alloc = "0.2.0"
-wdk-panic = "0.2.0"
 wdk-sys = "0.2.0"
-wdrf.workspace = true
-anyhow.workspace = true
 
 [build-dependencies]
 wdk-build = "0.2.0"

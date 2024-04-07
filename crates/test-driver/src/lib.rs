@@ -1,7 +1,6 @@
 #![no_std]
 
-#[cfg(not(test))]
-extern crate wdk_panic;
+use core::panic::PanicInfo;
 
 use wdk::{dbg_break, println};
 #[cfg(not(test))]
@@ -11,8 +10,16 @@ use wdk_alloc::WDKAllocator;
 #[global_allocator]
 static GLOBAL_ALLOCATOR: WDKAllocator = WDKAllocator;
 
-use wdk_sys::{DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING};
+use wdk_sys::{ntddk::KeBugCheckEx, DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING};
 use wdrf::driver::{DriverDispatch, DriverObject};
+
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    unsafe {
+        println!("[PANIC] called: {:#?}", info);
+        KeBugCheckEx(0x1234, 0, 0, 0, 0);
+    }
+}
 
 struct DriverContext {
     a: u32,
