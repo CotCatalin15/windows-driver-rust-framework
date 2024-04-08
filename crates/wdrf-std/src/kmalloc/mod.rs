@@ -173,8 +173,10 @@ impl<T: TaggedObject> GlobalKernelAllocator<T> {
         unsafe {
             let size = layout.size();
             let ptr = if self.fail_alloc {
+                std::println!("[Alloc] Failing to alloc size: {size}");
                 core::ptr::null_mut()
             } else {
+                std::println!("[Alloc] Allocating size: {size}");
                 std::alloc::alloc(layout.layout)
             };
             if ptr.is_null() {
@@ -189,6 +191,7 @@ impl<T: TaggedObject> GlobalKernelAllocator<T> {
 
     unsafe fn deallocate_internal(&self, ptr: NonNull<u8>, layout: TagLayout) {
         extern crate std;
+        std::println!("Deallocating {}", layout.size());
         std::alloc::dealloc(ptr.as_ptr(), layout.layout);
     }
 
@@ -203,6 +206,16 @@ impl<T: TaggedObject> Default for GlobalKernelAllocator<T> {
             _phantom: PhantomData,
             #[cfg(test)]
             fail_alloc: false,
+        }
+    }
+}
+
+impl<T: TaggedObject> Clone for GlobalKernelAllocator<T> {
+    fn clone(&self) -> Self {
+        Self {
+            _phantom: PhantomData,
+            #[cfg(test)]
+            fail_alloc: self.fail_alloc,
         }
     }
 }

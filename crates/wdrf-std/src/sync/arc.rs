@@ -1,98 +1,63 @@
-use core::sync::atomic::{AtomicU32, Ordering};
-
 use crate::{
-    boxed::{Box, BoxExt},
     kmalloc::{GlobalKernelAllocator, KernelAllocator, TaggedObject},
+    traits::DispatchSafe,
 };
 
-struct ReferenceBlock {
-    ref_count: AtomicU32,
-    weak_count: AtomicU32,
+#[allow(type_alias_bounds)]
+pub type Arc<
+    T: TaggedObject,
+    A: KernelAllocator + alloc::alloc::Allocator = GlobalKernelAllocator<T>,
+> = alloc::sync::Arc<T, A>;
+
+#[allow(type_alias_bounds)]
+pub type Weak<
+    T: TaggedObject,
+    A: KernelAllocator + alloc::alloc::Allocator = GlobalKernelAllocator<T>,
+> = alloc::sync::Weak<T, A>;
+
+unsafe impl<T: TaggedObject + DispatchSafe, A: KernelAllocator + alloc::alloc::Allocator>
+    DispatchSafe for Arc<T, A>
+{
 }
 
-struct LockError {}
-
-impl ReferenceBlock {
-    pub fn new() -> Self {
-        Self {
-            ref_count: AtomicU32::new(1),
-            weak_count: AtomicU32::new(1),
-        }
-    }
-
-    pub fn clone_strong(&mut self) {
-        let prev_ref = self.ref_count.fetch_add(1, Ordering::SeqCst);
-        if prev_ref == 0 {
-            panic!("Incrementing a 0 ref");
-        }
-    }
-
-    pub fn clone_weak(&mut self) {
-        self.weak_count.fetch_add(1, Ordering::SeqCst);
-    }
-
-    pub fn drop_strong(&mut self) -> bool {
-        self.ref_count.fetch_sub(1, Ordering::SeqCst) == 0
-    }
-
-    pub fn drop_weak(&mut self) -> bool {
-        self.ref_count.fetch_sub(0, Ordering::SeqCst) == 0
-    }
-
-    pub fn lock_weak(&mut self) -> anyhow::Result<(), LockError> {
-        let mut count = self.ref_count.load(Ordering::Relaxed);
-
-        while count != 0 {
-            match self.ref_count.compare_exchange_weak(
-                count,
-                count + 1,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            ) {
-                Ok(_) => return Ok(()),
-                Err(new_val) => count = new_val,
-            };
-        }
-
-        Err(LockError {})
-    }
+unsafe impl<T: TaggedObject + DispatchSafe, A: KernelAllocator + alloc::alloc::Allocator>
+    DispatchSafe for Weak<T, A>
+{
 }
 
-impl TaggedObject for ReferenceBlock {
-    fn tag() -> crate::kmalloc::MemoryTag {
-        crate::kmalloc::MemoryTag::new_from_bytes(b"arcb")
-    }
-
-    fn flags() -> u64 {
-        wdk_sys::POOL_FLAG_NON_PAGED
-    }
+pub trait ArcExt<T, A>
+where
+    T: TaggedObject,
+    A: KernelAllocator + alloc::alloc::Allocator,
+{
+    fn try_create(data: T) -> anyhow::Result<Arc<T, A>>;
 }
 
-pub struct Arc<T: TaggedObject> {
-    inner: Box<T>,
-    ref_block: Box<ReferenceBlock>,
-}
-
-impl<T> Arc<T>
+impl<T> ArcExt<T, GlobalKernelAllocator<T>> for Arc<T, GlobalKernelAllocator<T>>
 where
     T: TaggedObject,
 {
-    pub fn try_create(value: T) -> anyhow::Result<Self> {
-        let inner = Box::try_create(value)?;
-        let ref_block = Box::try_create(ReferenceBlock::new())?;
-
-        Ok(Self { inner, ref_block })
+    fn try_create(data: T) -> anyhow::Result<Arc<T, GlobalKernelAllocator<T>>> {
+        Arc::try_new_in(data, GlobalKernelAllocator::<T>::default())
+            .map_err(|_| anyhow::Error::msg("Failed to allocate ArcInner<T>"))
     }
 }
 
-impl<T> Clone for Arc<T>
-where
-    T: TaggedObject,
-{
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-            ref_block: self.ref_block.clone(),
-        }
+#[cfg(test)]
+mod tests {
+    use super::{Arc, ArcExt};
+
+    extern crate std;
+    #[test]
+    fn test() -> anyhow::Result<()> {
+        let a = Arc::try_create(10)?;
+
+        let wa = Arc::downgrade(&a);
+
+        let ac = wa.upgrade().unwrap();
+
+        std::println!("Arc value: {}", *ac);
+
+        Ok(())
     }
 }

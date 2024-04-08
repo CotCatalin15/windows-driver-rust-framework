@@ -6,10 +6,6 @@ use wdk_sys::{
     DRIVER_OBJECT, POOL_FLAG_NON_PAGED, UNICODE_STRING, _DRIVER_OBJECT,
 };
 
-//pub type DRIVER_UNLOAD =
-//    ::core::option::Option<unsafe extern "C" fn(DriverObject: *mut _DRIVER_OBJECT)>;
-//pub type PDRIVER_UNLOAD = DRIVER_UNLOAD;
-
 pub type DriverUnloadFnc = fn(&mut DriverObject);
 
 pub struct DriverDispatch {
