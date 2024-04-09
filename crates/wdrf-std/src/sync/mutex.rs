@@ -101,11 +101,6 @@ where
 mod tests {
     extern crate std;
 
-    use core::cell::UnsafeCell;
-    use std::sync;
-
-    use alloc::rc::Rc;
-
     use crate::traits::WriteLock;
 
     use super::Mutex;

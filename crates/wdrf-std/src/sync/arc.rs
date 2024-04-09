@@ -56,7 +56,8 @@ mod tests {
 
         let ac = wa.upgrade().unwrap();
 
-        std::println!("Arc value: {}", *ac);
+        assert_eq!(*ac, 10);
+        assert_eq!(*a, 10);
 
         Ok(())
     }

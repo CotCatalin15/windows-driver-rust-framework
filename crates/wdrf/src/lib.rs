@@ -2,6 +2,7 @@
 #![feature(sync_unsafe_cell)]
 
 pub mod driver;
+pub mod minifilter;
 
 use driver::{DriverDispatch, DriverObject};
 use wdk_sys::{
