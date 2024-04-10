@@ -21,9 +21,9 @@ thiserror.workspace = true
 bitflags.workspace = true
 
 [dev-dependencies]
-wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", features = [
+wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build", features = [
     "test-stubs",
-], rev = "fe481aa" }
+] }
 
 [features]
 default = ["dev-features"]

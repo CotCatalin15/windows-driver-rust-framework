@@ -829,7 +829,7 @@ dependencies = [
 [[package]]
 name = "wdk"
 version = "0.2.0"
-source = "git+https://github.com/CotCatalin15/windows-drivers-rs?rev=fe481aa#fe481aa995c1a45dead76a3e318cd562b378fbbd"
+source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#8f16d3d421cacf5dcd6b14bd5a0e55a010a6418e"
 dependencies = [
  "wdk-build",
  "wdk-sys",
@@ -838,7 +838,7 @@ dependencies = [
 [[package]]
 name = "wdk-alloc"
 version = "0.2.0"
-source = "git+https://github.com/CotCatalin15/windows-drivers-rs?rev=fe481aa#fe481aa995c1a45dead76a3e318cd562b378fbbd"
+source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#8f16d3d421cacf5dcd6b14bd5a0e55a010a6418e"
 dependencies = [
  "wdk-sys",
 ]
@@ -846,7 +846,7 @@ dependencies = [
 [[package]]
 name = "wdk-build"
 version = "0.2.0"
-source = "git+https://github.com/CotCatalin15/windows-drivers-rs?rev=fe481aa#fe481aa995c1a45dead76a3e318cd562b378fbbd"
+source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#8f16d3d421cacf5dcd6b14bd5a0e55a010a6418e"
 dependencies = [
  "bindgen",
  "cargo_metadata",
@@ -862,7 +862,7 @@ dependencies = [
 [[package]]
 name = "wdk-macros"
 version = "0.2.0"
-source = "git+https://github.com/CotCatalin15/windows-drivers-rs?rev=fe481aa#fe481aa995c1a45dead76a3e318cd562b378fbbd"
+source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#8f16d3d421cacf5dcd6b14bd5a0e55a010a6418e"
 dependencies = [
  "cfg-if",
  "proc-macro2",
@@ -873,12 +873,12 @@ dependencies = [
 [[package]]
 name = "wdk-panic"
 version = "0.2.0"
-source = "git+https://github.com/CotCatalin15/windows-drivers-rs?rev=fe481aa#fe481aa995c1a45dead76a3e318cd562b378fbbd"
+source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#8f16d3d421cacf5dcd6b14bd5a0e55a010a6418e"
 
 [[package]]
 name = "wdk-sys"
 version = "0.2.0"
-source = "git+https://github.com/CotCatalin15/windows-drivers-rs?rev=fe481aa#fe481aa995c1a45dead76a3e318cd562b378fbbd"
+source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#8f16d3d421cacf5dcd6b14bd5a0e55a010a6418e"
 dependencies = [
  "anyhow",
  "bindgen",

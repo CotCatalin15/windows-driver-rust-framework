@@ -18,12 +18,12 @@ repository = "https://github.com/CotCatalin15/windows-driver-rust-framework"
 
 
 [workspace.dependencies]
-wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", rev = "fe481aa" }
-wdk-build = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", rev = "fe481aa" }
-wdk = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", rev = "fe481aa" }
-wdk-macros = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", rev = "fe481aa" }
-wdk-alloc = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", rev = "fe481aa" }
-wdk-panic = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", rev = "fe481aa" }
+wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
+wdk-build = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
+wdk = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
+wdk-macros = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
+wdk-alloc = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
+wdk-panic = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
 
 wdrf = { path = "crates/wdrf", version = "0.1.0" }
 wdrf-macros = { path = "crates/wdrf-macros", version = "0.1.0" }
