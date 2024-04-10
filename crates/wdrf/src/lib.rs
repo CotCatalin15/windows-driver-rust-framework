@@ -48,10 +48,13 @@ mod tests {
         let driver_obj = 0x1 as *mut DRIVER_OBJECT;
         let registry_path = 0x1 as *mut UNICODE_STRING;
 
-        let mut status = Framework::run_entry(driver_obj, registry_path, |_driver| Ok(()));
+        let mut status =
+            Framework::run_entry(driver_obj, registry_path, |_driver, dispatch| Ok(()));
         assert_eq!(status, STATUS_SUCCESS);
 
-        status = Framework::run_entry(driver_obj, registry_path, |_driver| Err(Error::msg("Test")));
+        status = Framework::run_entry(driver_obj, registry_path, |_driver, dispatch| {
+            Err(Error::msg("Test"))
+        });
         assert_eq!(status, STATUS_UNSUCCESSFUL);
     }
 }

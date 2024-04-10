@@ -20,6 +20,8 @@ wdk-sys.workspace = true
 anyhow.workspace = true
 
 [dev-dependencies]
-wdk-sys = { version = "0.2.0", features = ["test-stubs"] }
+wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", features = [
+    "test-stubs",
+], rev = "fe481aa" }
 
 [features]

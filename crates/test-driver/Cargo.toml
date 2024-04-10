@@ -8,13 +8,14 @@ repository.workspace = true
 wdrf-std.workspace = true
 wdrf.workspace = true
 anyhow.workspace = true
+wdk.workspace = true
+wdk-alloc.workspace = true
+wdk-panic.workspace = true
+wdk-sys.workspace = true
 wchar = "0.11.0"
-wdk = "0.2.0"
-wdk-alloc = "0.2.0"
-wdk-sys = "0.2.0"
 
 [build-dependencies]
-wdk-build = "0.2.0"
+wdk-build.workspace = true
 
 [lib]
 crate-type = ["cdylib"]

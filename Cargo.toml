@@ -18,10 +18,16 @@ repository = "https://github.com/CotCatalin15/windows-driver-rust-framework"
 
 
 [workspace.dependencies]
+wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", rev = "fe481aa" }
+wdk-build = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", rev = "fe481aa" }
+wdk = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", rev = "fe481aa" }
+wdk-macros = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", rev = "fe481aa" }
+wdk-alloc = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", rev = "fe481aa" }
+wdk-panic = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", rev = "fe481aa" }
+
 wdrf = { path = "crates/wdrf", version = "0.1.0" }
 wdrf-macros = { path = "crates/wdrf-macros", version = "0.1.0" }
 wdrf-std = { path = "crates/wdrf-std", version = "0.1.0" }
-wdk-sys = "0.2.0"
 anyhow = { version = "1.0.35", default-features = false }
 thiserror = { version = "1.0", package = "thiserror-core", default-features = false }
 bitflags = "2.5.0"

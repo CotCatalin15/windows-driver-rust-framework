@@ -666,6 +666,7 @@ dependencies = [
  "wdk",
  "wdk-alloc",
  "wdk-build",
+ "wdk-panic",
  "wdk-sys",
  "wdrf",
  "wdrf-std",
@@ -828,8 +829,7 @@ dependencies = [
 [[package]]
 name = "wdk"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e255fa09cb7395c5f9b8c72831347c9b77aa51fc66c3f44eb5d097a44122e9f"
+source = "git+https://github.com/CotCatalin15/windows-drivers-rs?rev=fe481aa#fe481aa995c1a45dead76a3e318cd562b378fbbd"
 dependencies = [
  "wdk-build",
  "wdk-sys",
@@ -838,8 +838,7 @@ dependencies = [
 [[package]]
 name = "wdk-alloc"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00c3180aa54fa2e30ecfd52a9e40210e634c09f760658cf8793ef0bf2ee7d917"
+source = "git+https://github.com/CotCatalin15/windows-drivers-rs?rev=fe481aa#fe481aa995c1a45dead76a3e318cd562b378fbbd"
 dependencies = [
  "wdk-sys",
 ]
@@ -847,8 +846,7 @@ dependencies = [
 [[package]]
 name = "wdk-build"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78da0616ae3b04f9488d250e8b087b7b332e7f1f18b4c7bcedebf7aea6231594"
+source = "git+https://github.com/CotCatalin15/windows-drivers-rs?rev=fe481aa#fe481aa995c1a45dead76a3e318cd562b378fbbd"
 dependencies = [
  "bindgen",
  "cargo_metadata",
@@ -864,8 +862,7 @@ dependencies = [
 [[package]]
 name = "wdk-macros"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65a27743e45f2bacdc8a778482a52ea2fda527bdac95bad5086cee080441b2da"
+source = "git+https://github.com/CotCatalin15/windows-drivers-rs?rev=fe481aa#fe481aa995c1a45dead76a3e318cd562b378fbbd"
 dependencies = [
  "cfg-if",
  "proc-macro2",
@@ -874,10 +871,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wdk-panic"
+version = "0.2.0"
+source = "git+https://github.com/CotCatalin15/windows-drivers-rs?rev=fe481aa#fe481aa995c1a45dead76a3e318cd562b378fbbd"
+
+[[package]]
 name = "wdk-sys"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36c6fbc666a0535164ebbb16cff321ee2cac38636aa6b9f1712148388f401087"
+source = "git+https://github.com/CotCatalin15/windows-drivers-rs?rev=fe481aa#fe481aa995c1a45dead76a3e318cd562b378fbbd"
 dependencies = [
  "anyhow",
  "bindgen",
