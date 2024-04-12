@@ -22,15 +22,9 @@ impl Framework {
     where
         F: 'static + FnOnce(&'static mut DriverObject, &mut DriverDispatch) -> anyhow::Result<()>,
     {
-        match DriverObject::init(driver, registry_path) {
-            None => STATUS_INVALID_PARAMETER,
-            Some((driver_object, disptach)) => {
-                let result = main_fnc(driver_object, disptach);
-                match result {
-                    Ok(_) => STATUS_SUCCESS,
-                    Err(_) => STATUS_UNSUCCESSFUL,
-                }
-            }
+        match DriverObject::init(driver, registry_path, main_fnc) {
+            Ok(()) => STATUS_SUCCESS,
+            Err(_) => STATUS_UNSUCCESSFUL,
         }
     }
 }

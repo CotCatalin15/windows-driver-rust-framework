@@ -27,12 +27,16 @@ unsafe impl Sync for DriverObject {}
 static mut GLOBAL_DRIVER: DriverObject = DriverObject::zeroed();
 
 impl DriverObject {
-    pub fn init(
+    pub fn init<F>(
         driver: *mut DRIVER_OBJECT,
         registry: *const UNICODE_STRING,
-    ) -> Option<(&'static mut Self, &'static mut DriverDispatch)> {
+        main_fnc: F,
+    ) -> anyhow::Result<()>
+    where
+        F: 'static + FnOnce(&'static mut DriverObject, &mut DriverDispatch) -> anyhow::Result<()>,
+    {
         if driver.is_null() || registry.is_null() {
-            None
+            Err(anyhow::Error::msg("Invalid entry parameters"))
         } else {
             #[allow(static_mut_refs)]
             unsafe {
@@ -42,8 +46,29 @@ impl DriverObject {
                     dispatch: DriverDispatch::new(driver),
                 };
 
-                Some((&mut GLOBAL_DRIVER, &mut GLOBAL_DRIVER.dispatch))
+                match main_fnc(&mut GLOBAL_DRIVER, &mut GLOBAL_DRIVER.dispatch) {
+                    Ok(()) => Ok(()),
+                    Err(e) => {
+                        Self::uninit();
+                        Err(e)
+                    }
+                }
             }
+        }
+    }
+
+    ///
+    /// # Safety
+    /// MUST be called in 2 places:
+    /// 1. On driver init fail
+    /// 2. On driver unload
+    /// Calling it from other places will result in the context becoming invalid
+    ///
+    unsafe fn uninit() {
+        let object = DriverObject::get_global();
+
+        if let Some(context) = object.dispatch.context.take() {
+            core::mem::drop(context);
         }
     }
 
@@ -111,7 +136,5 @@ unsafe extern "C" fn driver_unload_impl(_: *mut _DRIVER_OBJECT) {
         fnc(object);
     }
 
-    if let Some(context) = object.dispatch.context.take() {
-        core::mem::drop(context);
-    }
+    DriverObject::uninit();
 }
