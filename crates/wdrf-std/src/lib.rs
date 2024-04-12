@@ -3,6 +3,9 @@
 #![feature(allocator_api)]
 #![feature(negative_impls)]
 
+use thiserror::Error;
+use wdk_sys::{NTSTATUS, NT_SUCCESS};
+
 extern crate alloc;
 
 pub mod boxed;
@@ -11,3 +14,24 @@ pub mod sync;
 mod sys;
 pub mod traits;
 pub mod vec;
+
+#[derive(Error, Debug)]
+#[error("NtStatus error {code}")]
+pub struct NtStatusError {
+    code: NTSTATUS,
+}
+
+pub type Result = anyhow::Result<(), NtStatusError>;
+
+pub trait NtResultEx {
+    fn from_status(status: NTSTATUS) -> Result {
+        if NT_SUCCESS(status) {
+            Ok(())
+        } else {
+            Err(NtStatusError { code: status })
+        }
+    }
+}
+
+impl NtResultEx for Result {}
+impl NtResultEx for NTSTATUS {}

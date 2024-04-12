@@ -1,25 +1,24 @@
-use crate::kmalloc::{GlobalKernelAllocator, KernelAllocator, TaggedObject};
+use core::alloc::Allocator;
+
+use crate::kmalloc::{GlobalKernelAllocator, TaggedObject};
 
 #[allow(type_alias_bounds)]
-pub type Vec<
-    T: Sized + TaggedObject,
-    A: KernelAllocator + alloc::alloc::Allocator = GlobalKernelAllocator<T>,
-> = alloc::vec::Vec<T, A>;
+pub type Vec<T: TaggedObject, A: Allocator = GlobalKernelAllocator> = alloc::vec::Vec<T, A>;
 
 pub trait VecExt<T>
 where
-    T: Sized + TaggedObject,
+    T: TaggedObject,
 {
     fn try_push(&mut self, value: T) -> anyhow::Result<()>;
 
-    fn create() -> Vec<T, GlobalKernelAllocator<T>> {
-        Vec::new_in(GlobalKernelAllocator::default())
+    fn create() -> Vec<T, GlobalKernelAllocator> {
+        Vec::new_in(GlobalKernelAllocator::new_for_tagged::<T>())
     }
 }
 
-impl<T> VecExt<T> for Vec<T, GlobalKernelAllocator<T>>
+impl<T> VecExt<T> for Vec<T, GlobalKernelAllocator>
 where
-    T: Sized + TaggedObject,
+    T: TaggedObject,
 {
     fn try_push(&mut self, value: T) -> anyhow::Result<()> {
         self.try_reserve(1)
@@ -51,7 +50,7 @@ mod test {
 
     #[test]
     fn test_fail_push() -> anyhow::Result<()> {
-        let mut alloc = GlobalKernelAllocator::<i32>::default();
+        let mut alloc = GlobalKernelAllocator::new_for_tagged::<i32>();
         alloc.fail_allocations(true);
 
         let mut v = Vec::new_in(alloc);

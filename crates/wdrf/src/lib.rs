@@ -3,6 +3,7 @@
 
 pub mod driver;
 pub mod minifilter;
+pub mod process;
 
 use driver::{DriverDispatch, DriverObject};
 use wdk_sys::{

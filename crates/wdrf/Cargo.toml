@@ -16,6 +16,7 @@ lto = true
 
 
 [dependencies]
+wdrf-std.workspace = true
 wdk-sys.workspace = true
 anyhow.workspace = true
 

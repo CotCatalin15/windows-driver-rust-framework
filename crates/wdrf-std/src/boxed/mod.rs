@@ -1,18 +1,18 @@
 use core::alloc::Allocator;
 
-use crate::kmalloc::{GlobalKernelAllocator, KernelAllocator, TaggedObject};
+use crate::kmalloc::{GlobalKernelAllocator, TaggedObject};
 
 #[allow(type_alias_bounds)]
-pub type Box<T: TaggedObject, A: Allocator + KernelAllocator = GlobalKernelAllocator<T>> =
+pub type Box<T: TaggedObject + ?Sized, A: Allocator = GlobalKernelAllocator> =
     alloc::boxed::Box<T, A>;
 
-pub trait BoxExt<T: TaggedObject, A: Allocator + KernelAllocator> {
+pub trait BoxExt<T: TaggedObject, A: Allocator> {
     fn try_create(value: T) -> anyhow::Result<Box<T, A>>;
 }
 
-impl<T: TaggedObject> BoxExt<T, GlobalKernelAllocator<T>> for Box<T, GlobalKernelAllocator<T>> {
-    fn try_create(value: T) -> anyhow::Result<Box<T, GlobalKernelAllocator<T>>> {
-        Box::try_new_in(value, GlobalKernelAllocator::default())
+impl<T: TaggedObject> BoxExt<T, GlobalKernelAllocator> for Box<T, GlobalKernelAllocator> {
+    fn try_create(value: T) -> anyhow::Result<Box<T, GlobalKernelAllocator>> {
+        Box::try_new_in(value, GlobalKernelAllocator::new_for_tagged::<T>())
             .map_err(|_| anyhow::Error::msg("Failed to create box"))
     }
 }

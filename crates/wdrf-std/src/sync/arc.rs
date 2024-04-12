@@ -1,44 +1,33 @@
+use core::alloc::Allocator;
+
 use crate::{
-    kmalloc::{GlobalKernelAllocator, KernelAllocator, TaggedObject},
+    kmalloc::{GlobalKernelAllocator, TaggedObject},
     traits::DispatchSafe,
 };
 
 #[allow(type_alias_bounds)]
-pub type Arc<
-    T: TaggedObject,
-    A: KernelAllocator + alloc::alloc::Allocator = GlobalKernelAllocator<T>,
-> = alloc::sync::Arc<T, A>;
+pub type Arc<T, A: Allocator = GlobalKernelAllocator> = alloc::sync::Arc<T, A>;
 
 #[allow(type_alias_bounds)]
-pub type Weak<
-    T: TaggedObject,
-    A: KernelAllocator + alloc::alloc::Allocator = GlobalKernelAllocator<T>,
-> = alloc::sync::Weak<T, A>;
+pub type Weak<T: TaggedObject, A: Allocator = GlobalKernelAllocator> = alloc::sync::Weak<T, A>;
 
-unsafe impl<T: TaggedObject + DispatchSafe, A: KernelAllocator + alloc::alloc::Allocator>
-    DispatchSafe for Arc<T, A>
-{
-}
-
-unsafe impl<T: TaggedObject + DispatchSafe, A: KernelAllocator + alloc::alloc::Allocator>
-    DispatchSafe for Weak<T, A>
-{
-}
+unsafe impl<T: DispatchSafe, A: Allocator> DispatchSafe for Arc<T, A> {}
+unsafe impl<T: DispatchSafe, A: Allocator> DispatchSafe for Weak<T, A> {}
 
 pub trait ArcExt<T, A>
 where
     T: TaggedObject,
-    A: KernelAllocator + alloc::alloc::Allocator,
+    A: Allocator,
 {
     fn try_create(data: T) -> anyhow::Result<Arc<T, A>>;
 }
 
-impl<T> ArcExt<T, GlobalKernelAllocator<T>> for Arc<T, GlobalKernelAllocator<T>>
+impl<T> ArcExt<T, GlobalKernelAllocator> for Arc<T, GlobalKernelAllocator>
 where
     T: TaggedObject,
 {
-    fn try_create(data: T) -> anyhow::Result<Arc<T, GlobalKernelAllocator<T>>> {
-        Arc::try_new_in(data, GlobalKernelAllocator::<T>::default())
+    fn try_create(data: T) -> anyhow::Result<Arc<T, GlobalKernelAllocator>> {
+        Arc::try_new_in(data, GlobalKernelAllocator::new_for_tagged::<T>())
             .map_err(|_| anyhow::Error::msg("Failed to allocate ArcInner<T>"))
     }
 }

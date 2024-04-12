@@ -1,6 +1,5 @@
 use core::{
     alloc::{Allocator, Layout},
-    marker::PhantomData,
     ptr::NonNull,
 };
 
@@ -10,6 +9,7 @@ use wdk_sys::{
     POOL_FLAG_NON_PAGED,
 };
 
+#[derive(Clone, Copy)]
 pub struct MemoryTag {
     tag: u32,
 }
@@ -53,48 +53,14 @@ pub enum AllocError {
     Unknown(&'static str),
 }
 
-pub struct TagLayout {
-    pub tag: MemoryTag,
-    pub flags: u64,
-    pub layout: Layout,
-}
-
-impl TagLayout {
-    pub fn new<T: TaggedObject>() -> Self {
-        Self {
-            layout: Layout::new::<T>(),
-            flags: T::flags(),
-            tag: T::tag(),
-        }
-    }
-
-    pub fn from_layout<T: TaggedObject>(layout: Layout) -> Self {
-        Self {
-            tag: T::tag(),
-            flags: T::flags(),
-            layout,
-        }
-    }
-
-    #[inline]
-    pub fn size(&self) -> usize {
-        self.layout.size()
-    }
-
-    #[inline]
-    pub fn tag(&self) -> u32 {
-        self.tag.tag
-    }
-}
-
 /// Allocated memory the size of the layout
 ///
 /// # Safety
 ///
-/// * `layout` must be a valid
+/// * `layout` must be valid
 ///
-pub unsafe fn alloc(layout: TagLayout) -> *mut u8 {
-    ExAllocatePool2(layout.flags, layout.layout.size() as u64, layout.tag()).cast()
+pub unsafe fn alloc(tag: MemoryTag, flags: u64, layout: Layout) -> *mut u8 {
+    ExAllocatePool2(flags, layout.size() as u64, tag.tag).cast()
 }
 
 /// Deallocates the memory referenced by `ptr`.
@@ -106,50 +72,52 @@ pub unsafe fn alloc(layout: TagLayout) -> *mut u8 {
 ///
 /// [*currently allocated*]: #currently-allocated-memory
 /// [*fit*]: #memory-fitting
-pub unsafe fn dealloc(ptr: *mut u8, layout: TagLayout) {
+pub unsafe fn dealloc(ptr: *mut u8, tag: MemoryTag, _layout: Layout) {
     if ptr.is_null() {
         #[cfg(feature = "alloc-sanity")]
         {
             panic!("delloc provided with a null ptr");
         }
     } else {
-        ExFreePoolWithTag(ptr.cast(), layout.tag());
+        ExFreePoolWithTag(ptr.cast(), tag.tag);
     }
 }
 
-///A general trait for a kernel allocator that can allocate and deallocate memory
-///
-/// # Safety
-///
-/// Safety comment :)
-pub unsafe trait KernelAllocator {
-    ///Allocated a block of memory with size specified in the layout
-    ///
-    fn allocate(&self, layout: TagLayout) -> anyhow::Result<NonNull<[u8]>, AllocError>;
-
-    /// Deallocates the memory referenced by `ptr`.
-    ///
-    /// # Safety
-    ///
-    /// * `ptr` must denote a block of memory currently allocated via this allocator, and
-    /// * `layout` must fit  that block of memory.
-    ///
-    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: TagLayout);
-}
-
-pub struct GlobalKernelAllocator<T: TaggedObject> {
-    _phantom: PhantomData<T>,
+#[derive(Clone, Copy)]
+pub struct GlobalKernelAllocator {
+    tag: MemoryTag,
+    flags: u64,
     #[cfg(test)]
     fail_alloc: bool,
 }
 
+impl GlobalKernelAllocator {
+    pub fn new(tag: MemoryTag, flags: u64) -> Self {
+        Self {
+            tag,
+            flags,
+            #[cfg(test)]
+            fail_alloc: false,
+        }
+    }
+
+    pub fn new_for_tagged<T: TaggedObject>() -> Self {
+        Self {
+            tag: T::tag(),
+            flags: T::flags(),
+            #[cfg(test)]
+            fail_alloc: false,
+        }
+    }
+}
+
 #[cfg(not(test))]
-impl<T: TaggedObject> GlobalKernelAllocator<T> {
+impl GlobalKernelAllocator {
     #[inline]
-    fn allocate_internal(&self, layout: TagLayout) -> Result<NonNull<[u8]>, AllocError> {
+    fn allocate_internal(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         unsafe {
             let size = layout.size();
-            let ptr = alloc(layout);
+            let ptr = alloc(self.tag, self.flags, layout);
             if ptr.is_null() {
                 Err(AllocError::OutOfMemory)
             } else {
@@ -160,15 +128,15 @@ impl<T: TaggedObject> GlobalKernelAllocator<T> {
         }
     }
 
-    unsafe fn deallocate_internal(&self, ptr: NonNull<u8>, _layout: TagLayout) {
-        ExFreePoolWithTag(ptr.as_ptr().cast(), T::tag().tag);
+    unsafe fn deallocate_internal(&self, ptr: NonNull<u8>, layout: Layout) {
+        dealloc(ptr.as_ptr(), self.tag, layout);
     }
 }
 
 #[cfg(test)]
-impl<T: TaggedObject> GlobalKernelAllocator<T> {
+impl GlobalKernelAllocator {
     #[inline]
-    fn allocate_internal(&self, layout: TagLayout) -> Result<NonNull<[u8]>, AllocError> {
+    fn allocate_internal(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         extern crate std;
         unsafe {
             let size = layout.size();
@@ -177,7 +145,7 @@ impl<T: TaggedObject> GlobalKernelAllocator<T> {
                 core::ptr::null_mut()
             } else {
                 std::println!("[Alloc] Allocating size: {size}");
-                std::alloc::alloc(layout.layout)
+                std::alloc::alloc(layout)
             };
             if ptr.is_null() {
                 Err(AllocError::OutOfMemory)
@@ -189,10 +157,10 @@ impl<T: TaggedObject> GlobalKernelAllocator<T> {
         }
     }
 
-    unsafe fn deallocate_internal(&self, ptr: NonNull<u8>, layout: TagLayout) {
+    unsafe fn deallocate_internal(&self, ptr: NonNull<u8>, layout: Layout) {
         extern crate std;
         std::println!("Deallocating {}", layout.size());
-        std::alloc::dealloc(ptr.as_ptr(), layout.layout);
+        std::alloc::dealloc(ptr.as_ptr(), layout);
     }
 
     pub fn fail_allocations(&mut self, fail: bool) {
@@ -200,49 +168,15 @@ impl<T: TaggedObject> GlobalKernelAllocator<T> {
     }
 }
 
-impl<T: TaggedObject> Default for GlobalKernelAllocator<T> {
-    fn default() -> Self {
-        Self {
-            _phantom: PhantomData,
-            #[cfg(test)]
-            fail_alloc: false,
-        }
-    }
-}
-
-impl<T: TaggedObject> Clone for GlobalKernelAllocator<T> {
-    fn clone(&self) -> Self {
-        Self {
-            _phantom: PhantomData,
-            #[cfg(test)]
-            fail_alloc: self.fail_alloc,
-        }
-    }
-}
-
-unsafe impl<T: TaggedObject> KernelAllocator for GlobalKernelAllocator<T> {
-    #[inline]
-    fn allocate(&self, layout: TagLayout) -> Result<NonNull<[u8]>, AllocError> {
-        self.allocate_internal(layout)
-    }
-
-    #[inline]
-    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: TagLayout) {
-        self.deallocate_internal(ptr, layout);
-    }
-}
-
-unsafe impl<T: TaggedObject> Allocator for GlobalKernelAllocator<T> {
+unsafe impl Allocator for GlobalKernelAllocator {
     #[inline]
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, core::alloc::AllocError> {
-        let layout = TagLayout::from_layout::<T>(layout);
         self.allocate_internal(layout)
             .map_err(|_| core::alloc::AllocError)
     }
 
     #[inline]
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        let layout = TagLayout::from_layout::<T>(layout);
-        self.deallocate_internal(ptr, layout)
+        self.deallocate_internal(ptr, layout);
     }
 }
