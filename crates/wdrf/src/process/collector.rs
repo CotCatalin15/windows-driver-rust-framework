@@ -5,9 +5,9 @@ use wdk_sys::{
     _PS_CREATE_NOTIFY_INFO,
 };
 use wdrf_std::{
+    hashbrown::{HashMap, HashMapExt, OccupiedError},
     kmalloc::TaggedObject,
     sync::mutex::GuardedMutex,
-    vec::{Vec, VecExt},
     NtResultEx, Result,
 };
 
@@ -33,7 +33,7 @@ pub struct ProcessRegistry<H: ProcessHook + Send> {
     hook: H,
 
     ///TODO: Maybe make it a spin lock so it works at Dispatch ?
-    processes: GuardedMutex<Vec<H::Item>>,
+    processes: GuardedMutex<HashMap<u64, H::Item>>,
 }
 
 impl<H: ProcessHook + Send> ProcessRegistry<H> {
@@ -41,7 +41,7 @@ impl<H: ProcessHook + Send> ProcessRegistry<H> {
         Self {
             started: UnsafeCell::new(false),
             hook,
-            processes: GuardedMutex::new(Vec::create()),
+            processes: GuardedMutex::new(HashMap::create()),
         }
     }
 
@@ -111,16 +111,20 @@ impl<H: ProcessHook + Send> ProcessCollectorCallbacks for ProcessRegistry<H> {
             .on_process_create(process, process_id, create_info)?;
 
         let mut guard = self.processes.lock();
-        guard.try_push(item)?;
+        let occupation = guard.try_insert(process_id as _, item);
+
+        if let Err(OccupiedError { mut entry, value }) = occupation {
+            entry.insert(value);
+        }
 
         Ok(())
     }
 
     fn on_process_destroy(&mut self, _process: PEPROCESS, process_id: HANDLE) {
         let mut guard = self.processes.lock();
-        if let Some(index) = guard.iter().position(|item| item.pid() == process_id as _) {
-            guard.swap_remove(index);
-        }
+
+        let process_id: u64 = process_id as _;
+        guard.remove(&process_id);
     }
 }
 

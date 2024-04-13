@@ -180,3 +180,16 @@ unsafe impl Allocator for GlobalKernelAllocator {
         self.deallocate_internal(ptr, layout);
     }
 }
+
+unsafe impl allocator_api2::alloc::Allocator for GlobalKernelAllocator {
+    #[inline]
+    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, allocator_api2::alloc::AllocError> {
+        self.allocate_internal(layout)
+            .map_err(|_| allocator_api2::alloc::AllocError)
+    }
+
+    #[inline]
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+        self.deallocate_internal(ptr, layout);
+    }
+}

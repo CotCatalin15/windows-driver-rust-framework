@@ -6,10 +6,7 @@ pub mod minifilter;
 pub mod process;
 
 use driver::{DriverDispatch, DriverObject};
-use wdk_sys::{
-    DRIVER_OBJECT, NTSTATUS, STATUS_INVALID_PARAMETER, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
-    UNICODE_STRING,
-};
+use wdk_sys::{DRIVER_OBJECT, NTSTATUS, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING};
 
 pub struct Framework {}
 

@@ -9,11 +9,13 @@ use wdk_sys::{NTSTATUS, NT_SUCCESS};
 extern crate alloc;
 
 pub mod boxed;
+pub mod hashbrown;
 pub mod kmalloc;
 pub mod sync;
-mod sys;
 pub mod traits;
 pub mod vec;
+
+mod sys;
 
 #[derive(Error, Debug)]
 #[error("NtStatus error {code}")]

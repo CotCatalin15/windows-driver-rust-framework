@@ -34,7 +34,7 @@ struct TestDriverContext {
 
 impl TaggedObject for TestDriverContext {}
 
-fn driver_unload(driver: &mut DriverObject) {
+fn driver_unload(_driver: &mut DriverObject) {
     dbg_break();
 }
 
