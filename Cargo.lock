@@ -307,7 +307,6 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 dependencies = [
- "ahash",
  "allocator-api2",
 ]
 
@@ -688,7 +687,6 @@ dependencies = [
  "wdk",
  "wdk-alloc",
  "wdk-build",
- "wdk-panic",
  "wdk-sys",
  "wdrf",
  "wdrf-std",
@@ -899,11 +897,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wdk-panic"
-version = "0.2.0"
-source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#8f16d3d421cacf5dcd6b14bd5a0e55a010a6418e"
-
-[[package]]
 name = "wdk-sys"
 version = "0.2.0"
 source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#8f16d3d421cacf5dcd6b14bd5a0e55a010a6418e"
@@ -950,6 +943,7 @@ dependencies = [
 name = "wdrf-std"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "allocator-api2",
  "anyhow",
  "hashbrown",

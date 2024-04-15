@@ -7,7 +7,10 @@ use wdk_sys::{
 use wdrf_std::{
     hashbrown::{HashMap, HashMapExt, OccupiedError},
     kmalloc::TaggedObject,
-    sync::mutex::GuardedMutex,
+    sync::{
+        arc::{Arc, ArcExt},
+        mutex::GuardedMutex,
+    },
     NtResultEx, Result,
 };
 
@@ -22,7 +25,7 @@ pub trait ProcessHook {
         &mut self,
         process: PEPROCESS,
         process_id: HANDLE,
-        create_info: &mut _PS_CREATE_NOTIFY_INFO,
+        create_info: &_PS_CREATE_NOTIFY_INFO,
     ) -> anyhow::Result<Self::Item>;
 
     fn on_process_destroy(&mut self, item: &Self::Item);
@@ -32,8 +35,8 @@ pub struct ProcessRegistry<H: ProcessHook + Send> {
     started: UnsafeCell<bool>,
     hook: H,
 
-    ///TODO: Maybe make it a spin lock so it works at Dispatch ?
-    processes: GuardedMutex<HashMap<u64, H::Item>>,
+    ///TODO:Make it a rw dispatch spin lock
+    processes: GuardedMutex<HashMap<u64, Arc<H::Item>>>,
 }
 
 impl<H: ProcessHook + Send> ProcessRegistry<H> {
@@ -78,6 +81,16 @@ impl<H: ProcessHook + Send> ProcessRegistry<H> {
 
         Ok(())
     }
+
+    pub fn find_by_pid(&self, process_id: u64) -> Option<Arc<H::Item>> {
+        let guard = self.processes.lock();
+
+        if let Some(item) = guard.get(&process_id) {
+            Some(item.clone())
+        } else {
+            None
+        }
+    }
 }
 
 impl<H: ProcessHook + Send> Drop for ProcessRegistry<H> {
@@ -104,11 +117,13 @@ impl<H: ProcessHook + Send> ProcessCollectorCallbacks for ProcessRegistry<H> {
         process_id: HANDLE,
         create_info: PPS_CREATE_NOTIFY_INFO,
     ) -> anyhow::Result<()> {
-        let create_info = unsafe { &mut *create_info };
+        let create_info = unsafe { &*create_info };
 
         let item = self
             .hook
             .on_process_create(process, process_id, create_info)?;
+
+        let item = Arc::try_create(item)?;
 
         let mut guard = self.processes.lock();
         let occupation = guard.try_insert(process_id as _, item);

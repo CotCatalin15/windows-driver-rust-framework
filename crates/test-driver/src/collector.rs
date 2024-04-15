@@ -35,7 +35,7 @@ impl ProcessHook for TestProcessCollector {
         &mut self,
         _process: wdk_sys::PEPROCESS,
         process_id: wdk_sys::HANDLE,
-        _create_info: &mut _PS_CREATE_NOTIFY_INFO,
+        _create_info: &_PS_CREATE_NOTIFY_INFO,
     ) -> anyhow::Result<Self::Item> {
         Ok(ProcessItem::new(process_id as _))
     }
