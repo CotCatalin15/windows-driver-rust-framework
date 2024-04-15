@@ -64,7 +64,7 @@ where
     L: WriteLock,
 {
     fn new(lock: &'a Mutex<T, L>) -> Self {
-        Self { lock: lock }
+        Self { lock }
     }
 }
 

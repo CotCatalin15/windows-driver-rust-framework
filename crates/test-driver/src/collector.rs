@@ -1,6 +1,6 @@
 use wdk_sys::_PS_CREATE_NOTIFY_INFO;
 use wdrf::process::collector::{ProcessDescriptor, ProcessHook};
-use wdrf_std::kmalloc::TaggedObject;
+use wdrf_std::{kmalloc::TaggedObject, traits::DispatchSafe};
 
 pub struct TestProcessCollector {}
 
@@ -27,6 +27,8 @@ impl TestProcessCollector {
         Self {}
     }
 }
+
+unsafe impl DispatchSafe for TestProcessCollector {}
 
 impl ProcessHook for TestProcessCollector {
     type Item = ProcessItem;

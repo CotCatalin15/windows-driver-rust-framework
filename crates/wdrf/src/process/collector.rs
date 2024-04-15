@@ -9,8 +9,9 @@ use wdrf_std::{
     kmalloc::TaggedObject,
     sync::{
         arc::{Arc, ArcExt},
-        mutex::GuardedMutex,
+        rwlock::ExRwLock,
     },
+    traits::DispatchSafe,
     NtResultEx, Result,
 };
 
@@ -31,20 +32,21 @@ pub trait ProcessHook {
     fn on_process_destroy(&mut self, item: &Self::Item);
 }
 
-pub struct ProcessRegistry<H: ProcessHook + Send> {
+pub struct ProcessRegistry<H: ProcessHook + DispatchSafe + Send> {
     started: UnsafeCell<bool>,
     hook: H,
 
-    ///TODO:Make it a rw dispatch spin lock
-    processes: GuardedMutex<HashMap<u64, Arc<H::Item>>>,
+    processes: ExRwLock<HashMap<u64, Arc<H::Item>>>,
 }
 
-impl<H: ProcessHook + Send> ProcessRegistry<H> {
+unsafe impl<H: ProcessHook + DispatchSafe + Send> DispatchSafe for ProcessRegistry<H> {}
+
+impl<H: ProcessHook + DispatchSafe + Send> ProcessRegistry<H> {
     pub fn new(hook: H) -> Self {
         Self {
             started: UnsafeCell::new(false),
             hook,
-            processes: GuardedMutex::new(HashMap::create()),
+            processes: ExRwLock::new(HashMap::create()),
         }
     }
 
@@ -83,17 +85,13 @@ impl<H: ProcessHook + Send> ProcessRegistry<H> {
     }
 
     pub fn find_by_pid(&self, process_id: u64) -> Option<Arc<H::Item>> {
-        let guard = self.processes.lock();
+        let guard = self.processes.read();
 
-        if let Some(item) = guard.get(&process_id) {
-            Some(item.clone())
-        } else {
-            None
-        }
+        guard.get(&process_id).cloned()
     }
 }
 
-impl<H: ProcessHook + Send> Drop for ProcessRegistry<H> {
+impl<H: ProcessHook + Send + DispatchSafe> Drop for ProcessRegistry<H> {
     fn drop(&mut self) {
         let _ = self.stop_collector();
     }
@@ -110,7 +108,7 @@ trait ProcessCollectorCallbacks {
     fn on_process_destroy(&mut self, process: PEPROCESS, process_id: HANDLE);
 }
 
-impl<H: ProcessHook + Send> ProcessCollectorCallbacks for ProcessRegistry<H> {
+impl<H: ProcessHook + Send + DispatchSafe> ProcessCollectorCallbacks for ProcessRegistry<H> {
     fn on_process_create(
         &mut self,
         process: PEPROCESS,
@@ -125,7 +123,7 @@ impl<H: ProcessHook + Send> ProcessCollectorCallbacks for ProcessRegistry<H> {
 
         let item = Arc::try_create(item)?;
 
-        let mut guard = self.processes.lock();
+        let mut guard = self.processes.write();
         let occupation = guard.try_insert(process_id as _, item);
 
         if let Err(OccupiedError { mut entry, value }) = occupation {
@@ -136,7 +134,7 @@ impl<H: ProcessHook + Send> ProcessCollectorCallbacks for ProcessRegistry<H> {
     }
 
     fn on_process_destroy(&mut self, _process: PEPROCESS, process_id: HANDLE) {
-        let mut guard = self.processes.lock();
+        let mut guard = self.processes.write();
 
         let process_id: u64 = process_id as _;
         guard.remove(&process_id);

@@ -2,21 +2,20 @@ use core::cell::UnsafeCell;
 
 use wdk_sys::{
     ntddk::{
-        KeAcquireGuardedMutex, KeAcquireSpinLockRaiseToDpc, KeInitializeGuardedMutex,
-        KeInitializeSpinLock, KeReleaseGuardedMutex, KeReleaseSpinLock,
+        ExAcquireSpinLockExclusive, ExAcquireSpinLockShared, ExReleaseSpinLockExclusive,
+        ExReleaseSpinLockShared, KeAcquireGuardedMutex, KeAcquireSpinLockRaiseToDpc,
+        KeInitializeGuardedMutex, KeInitializeSpinLock, KeReleaseGuardedMutex, KeReleaseSpinLock,
     },
-    APC_LEVEL, KGUARDED_MUTEX, KSPIN_LOCK,
+    APC_LEVEL, EX_SPIN_LOCK, KGUARDED_MUTEX, KSPIN_LOCK,
 };
 
 #[cfg(feature = "irql-checks")]
 use wdrf_macros::irql_check;
 
-use crate::traits::{DispatchSafe, WriteLock};
+use crate::traits::{DispatchSafe, ReadLock, WriteLock};
 
 pub struct GuardedMutex {
     inner: UnsafeCell<KGUARDED_MUTEX>,
-    #[cfg(feature = "mutex-checks")]
-    is_locked: UnsafeCell<bool>,
 }
 
 unsafe impl Send for GuardedMutex {}
@@ -29,8 +28,6 @@ impl GuardedMutex {
             KeInitializeGuardedMutex(&mut mutex);
             Self {
                 inner: UnsafeCell::new(mutex),
-                #[cfg(feature = "mutex-checks")]
-                is_locked: UnsafeCell::new(false),
             }
         }
     }
@@ -48,26 +45,12 @@ impl WriteLock for GuardedMutex {
     fn lock(&self) {
         unsafe {
             KeAcquireGuardedMutex(self.inner.get());
-
-            #[cfg(feature = "mutex-checks")]
-            {
-                *self.is_locked.get() = true;
-            }
         }
     }
 
     ///Irql <= APC_LEVEL
     #[cfg_attr(feature = "irql-checks", irql_check(irql = APC_LEVEL))]
-    #[cfg_attr(feature = "mutex-checks", must_use)]
     fn unlock(&self) {
-        #[cfg(feature = "mutex-checks")]
-        unsafe {
-            if (*self.is_locked.get()) == false {
-                panic!("Unlock called without calling lock first");
-            }
-            *self.is_locked.get() = false;
-        }
-
         unsafe {
             KeReleaseGuardedMutex(self.inner.get());
         }
@@ -77,8 +60,6 @@ impl WriteLock for GuardedMutex {
 pub struct SpinLock {
     inner: UnsafeCell<KSPIN_LOCK>,
     old_irql: UnsafeCell<u8>,
-    #[cfg(feature = "mutex-checks")]
-    is_locked: UnsafeCell<bool>,
 }
 
 unsafe impl DispatchSafe for SpinLock {}
@@ -91,8 +72,6 @@ impl SpinLock {
             Self {
                 inner: UnsafeCell::new(mutex),
                 old_irql: UnsafeCell::new(0),
-                #[cfg(feature = "mutex-checks")]
-                is_locked: UnsafeCell::new(false),
             }
         }
     }
@@ -105,31 +84,77 @@ impl Default for SpinLock {
 }
 
 impl WriteLock for SpinLock {
-    #[cfg_attr(featur = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
+    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
     fn lock(&self) {
         unsafe {
             let old_irql = KeAcquireSpinLockRaiseToDpc(self.inner.get());
             *self.old_irql.get() = old_irql;
-
-            #[cfg(feature = "mutex-checks")]
-            {
-                *self.is_locked.get() = true;
-            }
         }
     }
 
-    #[cfg_attr(featur = "irql-check", irql_check(irql = DISPATCH_LEVEL, compare = IrqlCompare::Eq))]
+    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL, compare = IrqlCompare::Eq))]
     fn unlock(&self) {
         unsafe {
-            #[cfg(feature = "mutex-checks")]
-            {
-                if (*self.is_locked.get()) == false {
-                    panic!("Unlock called without calling lock first");
-                }
-                *self.is_locked.get() = false;
-            }
-
             KeReleaseSpinLock(self.inner.get(), *self.old_irql.get());
+        }
+    }
+}
+
+pub struct ExSpinLock {
+    inner: UnsafeCell<EX_SPIN_LOCK>,
+    old_irql: UnsafeCell<u8>,
+}
+
+unsafe impl DispatchSafe for ExSpinLock {}
+
+impl ExSpinLock {
+    pub fn new() -> Self {
+        unsafe {
+            let mutex = core::mem::zeroed();
+            Self {
+                inner: UnsafeCell::new(mutex),
+                old_irql: UnsafeCell::new(0),
+            }
+        }
+    }
+}
+
+impl Default for ExSpinLock {
+    fn default() -> Self {
+        ExSpinLock::new()
+    }
+}
+
+impl WriteLock for ExSpinLock {
+    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
+    fn lock(&self) {
+        unsafe {
+            let old_irql = ExAcquireSpinLockExclusive(self.inner.get());
+            *self.old_irql.get() = old_irql;
+        }
+    }
+
+    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL, compare = IrqlCompare::Eq))]
+    fn unlock(&self) {
+        unsafe {
+            ExReleaseSpinLockExclusive(self.inner.get(), *self.old_irql.get());
+        }
+    }
+}
+
+impl ReadLock for ExSpinLock {
+    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
+    fn lock_shared(&self) {
+        unsafe {
+            let old_irql = ExAcquireSpinLockShared(self.inner.get());
+            *self.old_irql.get() = old_irql;
+        }
+    }
+
+    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL, compare = IrqlCompare::Eq))]
+    fn unlock_shared(&self) {
+        unsafe {
+            ExReleaseSpinLockShared(self.inner.get(), *self.old_irql.get());
         }
     }
 }

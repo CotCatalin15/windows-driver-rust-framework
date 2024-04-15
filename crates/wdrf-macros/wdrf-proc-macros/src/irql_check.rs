@@ -47,7 +47,7 @@ fn generate_default_irql_comare() -> syn::Expr {
     let expr_path = syn::ExprPath {
         attrs: vec![],
         qself: None,
-        path: path,
+        path,
     };
 
     syn::Expr::Path(expr_path)
@@ -79,8 +79,7 @@ pub(crate) fn irql_check_attr_impl(
         fn _tmp_fnc() {
             wdrf_macros::irql_check_compare_and_panic::<{ #default_compare }>(#irql);
         }
-    }
-    .into();
+    };
 
     let mut irql_tokens: syn::ItemFn = syn::parse2(irql_tokens).unwrap();
 
@@ -89,6 +88,5 @@ pub(crate) fn irql_check_attr_impl(
 
     Ok(quote! {
         #tokens
-    }
-    .into())
+    })
 }
