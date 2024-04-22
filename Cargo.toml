@@ -40,6 +40,8 @@ hashbrown = { version = "0.14.3", default-features = false, features = [
 allocator-api2 = { version = "0.2.18", default-features = false }
 #ahash = { version = "0.8.11", default-features = false }
 
+wchar = "0.11.0"
+
 #Local crates
 wdrf = { path = "crates/wdrf", version = "0.1.0" }
 wdrf-macros = { path = "crates/wdrf-macros", version = "0.1.0" }

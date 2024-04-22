@@ -11,6 +11,8 @@ where
 {
     fn try_push(&mut self, value: T) -> anyhow::Result<()>;
 
+    fn try_insert(&mut self, idx: usize, value: T) -> anyhow::Result<()>;
+
     fn create() -> Vec<T, GlobalKernelAllocator> {
         Vec::new_in(GlobalKernelAllocator::new_for_tagged::<T>())
     }
@@ -26,6 +28,19 @@ where
 
         self.push(value);
         Ok(())
+    }
+
+    fn try_insert(&mut self, idx: usize, value: T) -> anyhow::Result<()> {
+        //PANIC: insert panics if index > self.len
+        if idx > self.len() {
+            Err(anyhow::Error::msg("Index out of bounds"))
+        } else {
+            self.try_reserve(1)
+                .map_err(|_| anyhow::Error::msg("Failed to reserve vec for try_push"))?;
+
+            self.insert(idx, value);
+            Ok(())
+        }
     }
 }
 

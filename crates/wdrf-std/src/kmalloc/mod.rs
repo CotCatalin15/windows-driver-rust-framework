@@ -36,8 +36,12 @@ pub trait TaggedObject {
     }
 }
 
+impl TaggedObject for i16 {}
+impl TaggedObject for u16 {}
+
 impl TaggedObject for i32 {}
 impl TaggedObject for u32 {}
+
 impl TaggedObject for i64 {}
 impl TaggedObject for u64 {}
 
@@ -87,6 +91,7 @@ pub unsafe fn dealloc(ptr: *mut u8, tag: MemoryTag, _layout: Layout) {
 pub struct GlobalKernelAllocator {
     tag: MemoryTag,
     flags: u64,
+
     #[cfg(test)]
     fail_alloc: bool,
 }

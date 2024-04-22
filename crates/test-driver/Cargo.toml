@@ -11,7 +11,7 @@ anyhow.workspace = true
 wdk.workspace = true
 wdk-alloc.workspace = true
 wdk-sys.workspace = true
-wchar = "0.11.0"
+wchar.workspace = true
 
 [build-dependencies]
 wdk-build.workspace = true

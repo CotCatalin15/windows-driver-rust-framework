@@ -1,16 +1,9 @@
-use core::marker::PhantomData;
-
-use wdk_sys::{
-    ntddk::{
-        RtlCompareUnicodeString, RtlDowncaseUnicodeChar, RtlInitUnicodeString,
-        RtlPrefixUnicodeString, RtlSuffixUnicodeString, RtlUpcaseUnicodeString, RtlUpperChar,
-    },
-    UNICODE_STRING,
-};
+use wdk_sys::ntddk::RtlCompareUnicodeString;
+use wdk_sys::UNICODE_STRING;
 
 pub struct NtUnicode<'a> {
     data: UNICODE_STRING,
-    str: &'a mut [u16],
+    pub str: &'a [u16],
 }
 
 impl<'a> NtUnicode<'a> {
@@ -21,45 +14,42 @@ impl<'a> NtUnicode<'a> {
         }
     }
 
-    pub fn lower(&mut self) {
-        self.str
-            .iter_mut()
-            .for_each(|c| unsafe { *c = RtlDowncaseUnicodeChar(*c) });
-    }
-
-    pub fn starts_with(&self, other: &NtUnicode, case_sensitive: bool) -> anyhow::Result<()> {
-        unsafe {
-            if 1 == RtlPrefixUnicodeString(&self.data, &other.data, (!case_sensitive) as _) {
-                Ok(())
-            } else {
-                Err(anyhow::Error::msg("test"))
-            }
+    pub fn new_from_slice(slice: &'a [u16]) -> Self {
+        Self {
+            data: UNICODE_STRING {
+                Length: slice.len() as _,
+                MaximumLength: slice.len() as _,
+                Buffer: slice.as_ptr() as _,
+            },
+            str: slice,
         }
     }
 
-    pub fn ends_with(&self, other: &NtUnicode, case_sensitive: bool) -> anyhow::Result<()> {
-        unsafe {
-            if 1 == RtlSuffixUnicodeString(&self.data, &other.data, (!case_sensitive) as _) {
-                Ok(())
-            } else {
-                Err(anyhow::Error::msg("test"))
-            }
-        }
+    pub fn starts_with(&self, prefix: &NtUnicode) -> bool {
+        self.str.starts_with(prefix.str)
     }
 
-    pub fn equals(&self, other: &NtUnicode, case_sensitive: bool) -> bool {}
+    pub fn ends_with(&self, sufix: &NtUnicode) -> bool {
+        self.str.ends_with(sufix.str)
+    }
 }
 
 impl<'a, 'b> PartialEq<NtUnicode<'b>> for NtUnicode<'a> {
     fn eq(&self, other: &NtUnicode<'b>) -> bool {
-        unsafe { RtlCompareUnicodeString(&self.data, &other.data, 1) == 0 }
+        unsafe { RtlCompareUnicodeString(&self.data, &other.data, 0) == 0 }
     }
 }
 
 impl<'a> Eq for NtUnicode<'a> {}
 
+impl<'a> PartialOrd for NtUnicode<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        self.str.partial_cmp(&other.str)
+    }
+}
+
 impl<'a> Ord for NtUnicode<'a> {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        todo!()
+        self.str.cmp(&other.str)
     }
 }

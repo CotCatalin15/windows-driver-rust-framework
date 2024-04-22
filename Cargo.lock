@@ -948,6 +948,7 @@ dependencies = [
  "anyhow",
  "hashbrown",
  "thiserror-core",
+ "wchar",
  "wdk-sys",
  "wdrf-macros",
 ]
