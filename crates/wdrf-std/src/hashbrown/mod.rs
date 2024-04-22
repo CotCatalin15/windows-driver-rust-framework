@@ -3,7 +3,8 @@ use allocator_api2::alloc::Allocator;
 pub use hashbrown::hash_map::OccupiedError;
 
 use crate::kmalloc::{GlobalKernelAllocator, TaggedObject};
-pub type DefaultHashBuilder = core::hash::BuildHasherDefault<ahash::AHasher>;
+
+pub use hashbrown::hash_map::DefaultHashBuilder;
 
 #[allow(type_alias_bounds)]
 pub type HashMap<K, V, S = DefaultHashBuilder, A: Allocator = GlobalKernelAllocator> =

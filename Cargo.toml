@@ -30,15 +30,15 @@ wdk-panic = { git = "https://github.com/CotCatalin15/windows-drivers-rs", versio
 anyhow = { version = "1.0.35", default-features = false }
 thiserror = { version = "1.0", package = "thiserror-core", default-features = false }
 
-#Container crates
 hashbrown = { version = "0.14.3", default-features = false, features = [
     "inline-more",
+    "ahash",
     "allocator-api2",
-] }
+] } #Container crates
 
 #Required for hashbrown 
 allocator-api2 = { version = "0.2.18", default-features = false }
-ahash = { version = "0.8.11", default-features = false }
+#ahash = { version = "0.8.11", default-features = false }
 
 #Local crates
 wdrf = { path = "crates/wdrf", version = "0.1.0" }

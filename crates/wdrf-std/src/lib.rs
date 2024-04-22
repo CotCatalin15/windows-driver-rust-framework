@@ -11,6 +11,7 @@ extern crate alloc;
 pub mod boxed;
 pub mod hashbrown;
 pub mod kmalloc;
+pub mod string;
 pub mod sync;
 pub mod traits;
 pub mod vec;

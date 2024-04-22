@@ -20,7 +20,7 @@ anyhow.workspace = true
 thiserror.workspace = true
 hashbrown.workspace = true
 allocator-api2.workspace = true
-ahash.workspace = true
+#ahash.workspace = true
 
 [dev-dependencies]
 wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build", features = [
