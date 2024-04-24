@@ -2,11 +2,14 @@
 #![feature(sync_unsafe_cell)]
 
 pub mod driver;
+pub mod framework;
 pub mod minifilter;
 pub mod process;
 
 use driver::{DriverDispatch, DriverObject};
 use wdk_sys::{DRIVER_OBJECT, NTSTATUS, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING};
+
+pub struct FrameworkContext;
 
 pub struct Framework {}
 

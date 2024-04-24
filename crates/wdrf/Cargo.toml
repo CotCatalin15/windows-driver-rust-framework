@@ -26,3 +26,4 @@ wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", branch =
 ] }
 
 [features]
+default = []

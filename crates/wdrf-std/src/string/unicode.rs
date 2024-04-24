@@ -114,6 +114,36 @@ impl UnicodeString {
     }
 }
 
+impl PartialEq<UnicodeString> for UnicodeString {
+    #[inline]
+    fn eq(&self, other: &UnicodeString) -> bool {
+        self.vec == other.vec
+    }
+}
+
+impl Eq for UnicodeString {}
+
+impl PartialOrd<UnicodeString> for UnicodeString {
+    #[inline]
+    fn partial_cmp(&self, other: &UnicodeString) -> Option<core::cmp::Ordering> {
+        self.vec.partial_cmp(&other.vec)
+    }
+}
+
+impl Ord for UnicodeString {
+    #[inline]
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.vec.cmp(&other.vec)
+    }
+}
+
+impl PartialEq<NtUnicode<'_>> for UnicodeString {
+    #[inline]
+    fn eq(&self, other: &NtUnicode<'_>) -> bool {
+        self.as_bytes() == other.str
+    }
+}
+
 pub struct UnicodeChars<'a> {
     pub(super) iter: core::slice::Iter<'a, u16>,
 }

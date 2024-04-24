@@ -1,6 +1,6 @@
 use core::{any::Any, cell::UnsafeCell};
 
-use wdk_sys::{DRIVER_OBJECT, UNICODE_STRING, _DRIVER_OBJECT};
+use wdk_sys::{DRIVER_OBJECT, IRP, UNICODE_STRING, _DRIVER_OBJECT};
 use wdrf_std::{
     boxed::{Box, BoxExt},
     kmalloc::TaggedObject,
@@ -17,7 +17,7 @@ pub struct DriverDispatch {
 
 #[allow(dead_code)]
 pub struct DriverObject {
-    object: *mut DRIVER_OBJECT,
+    pub object: *mut DRIVER_OBJECT,
     registry: *const UNICODE_STRING,
     dispatch: DriverDispatch,
 }
