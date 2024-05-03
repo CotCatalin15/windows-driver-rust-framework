@@ -1,6 +1,6 @@
 use core::{any::Any, cell::UnsafeCell};
 
-use wdk_sys::{DRIVER_OBJECT, IRP, UNICODE_STRING, _DRIVER_OBJECT};
+use wdk_sys::{DRIVER_OBJECT, UNICODE_STRING, _DRIVER_OBJECT};
 use wdrf_std::{
     boxed::{Box, BoxExt},
     kmalloc::TaggedObject,

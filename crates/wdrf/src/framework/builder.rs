@@ -1,18 +1,16 @@
-use core::ptr::NonNull;
+use core::{any::Any, ptr::NonNull};
 
-use wdk_sys::{fltmgr::_FLT_FILTER, DRIVER_OBJECT};
+use wdk_sys::DRIVER_OBJECT;
 use wdrf_std::string::ntunicode::NtUnicode;
-
-pub trait FrameworkContext {}
 
 pub struct FrameworkBuilder {
     pub(super) driver: NonNull<DRIVER_OBJECT>,
     pub(super) registry: NtUnicode<'static>,
-    pub(super) context: Option<&'static mut dyn FrameworkContext>,
+    pub(super) context: Option<&'static mut dyn Any>,
     unload_fnc: Option<FrameworkUnloadCallback>,
 }
 
-pub type FrameworkUnloadCallback = fn(&mut dyn FrameworkContext);
+pub type FrameworkUnloadCallback = fn(&mut DriverFramework);
 
 impl FrameworkBuilder {
     pub fn new(driver: NonNull<DRIVER_OBJECT>, registry: NtUnicode<'static>) -> Self {
@@ -24,7 +22,8 @@ impl FrameworkBuilder {
         }
     }
 
-    pub fn context(&mut self, context: &'static mut dyn FrameworkContext) -> &mut Self {
+    //The context here will be droped when the unload callback will be called
+    pub fn context(&mut self, context: &'static mut dyn core::any::Any) -> &mut Self {
         self.context = Some(context);
         self
     }
@@ -34,10 +33,21 @@ impl FrameworkBuilder {
         self
     }
 
-    pub fn build(self) -> DriverFramework {
-        DriverFramework {
-            driver: self.driver,
-            registry: self.registry,
+    pub fn build(self) -> &'static mut DriverFramework {
+        unsafe {
+            GLOBAL_DRIVER_FRAMEWORK = Some(DriverFramework {
+                driver: self.driver,
+                registry: self.registry,
+                context: DriverFrameworkContext {
+                    unload_fnc: self.unload_fnc,
+                    context: self.context,
+                },
+            });
+
+            (*self.driver.as_ptr()).DriverUnload =
+                self.unload_fnc.map(|_| framework_driver_unload as _);
+
+            GLOBAL_DRIVER_FRAMEWORK.as_mut().unwrap()
         }
     }
 }
@@ -45,4 +55,39 @@ impl FrameworkBuilder {
 pub struct DriverFramework {
     pub driver: NonNull<DRIVER_OBJECT>,
     pub registry: NtUnicode<'static>,
+    context: DriverFrameworkContext,
+}
+
+impl DriverFramework {
+    pub fn get() -> &'static mut DriverFramework {
+        unsafe { GLOBAL_DRIVER_FRAMEWORK.as_mut().unwrap() }
+    }
+}
+
+struct DriverFrameworkContext {
+    pub(super) unload_fnc: Option<FrameworkUnloadCallback>,
+
+    ///
+    /// Store the context here so it gets droped when unload is called
+    /// Static objects are not automatically destroyed when unload is called
+    /// So it has to be done manualy
+    ///
+    #[allow(dead_code)]
+    pub(super) context: Option<&'static mut dyn Any>,
+}
+
+unsafe impl Sync for DriverFrameworkContext {}
+
+static mut GLOBAL_DRIVER_FRAMEWORK: Option<DriverFramework> = None;
+
+pub unsafe extern "C" fn framework_driver_unload(_driver: *mut DRIVER_OBJECT) {
+    if let Some(mut framework) = GLOBAL_DRIVER_FRAMEWORK.take() {
+        framework
+            .context
+            .unload_fnc
+            .inspect(|cb| cb(&mut framework));
+
+        // This is where the drop occurs => drops the context
+        // drop(framework);
+    }
 }
