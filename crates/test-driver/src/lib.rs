@@ -1,6 +1,6 @@
 #![no_std]
 
-use core::panic::PanicInfo;
+use core::{panic::PanicInfo, ptr::NonNull};
 
 use collector::TestProcessCollector;
 use wdk::{dbg_break, println};
@@ -11,12 +11,13 @@ use wdk_alloc::WDKAllocator;
 #[global_allocator]
 static GLOBAL_ALLOCATOR: WDKAllocator = WDKAllocator;
 
-use wdk_sys::{ntddk::KeBugCheckEx, DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING};
+use wdk_sys::{ntddk::KeBugCheckEx, DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING, STATUS_SUCCESS};
 use wdrf::{
     driver::{DriverDispatch, DriverObject},
+    framework::minifilter::{MinifilterFramework, MinifilterFrameworkBuilder},
     process::collector::ProcessRegistry,
 };
-use wdrf_std::kmalloc::TaggedObject;
+use wdrf_std::{kmalloc::TaggedObject, string::ntunicode::NtUnicode};
 
 pub mod collector;
 
@@ -32,28 +33,6 @@ struct TestDriverContext {
     collector: ProcessRegistry<TestProcessCollector>,
 }
 
-impl TaggedObject for TestDriverContext {}
-
-fn driver_unload(_driver: &mut DriverObject) {
-    dbg_break();
-}
-
-pub fn driver_main(_: &mut DriverObject, dispatch: &mut DriverDispatch) -> anyhow::Result<()> {
-    dispatch.set_context(TestDriverContext {
-        collector: ProcessRegistry::new(TestProcessCollector::new()),
-    })?;
-
-    dispatch
-        .get_context::<TestDriverContext>()
-        .unwrap()
-        .collector
-        .start_collector()
-        .map_err(|_| anyhow::Error::msg("Failed to start process collector"))?;
-
-    dispatch.set_unload(driver_unload);
-    Ok(())
-}
-
 ///# Safety
 ///
 /// Its safe its just for testing
@@ -65,5 +44,17 @@ pub unsafe extern "system" fn driver_entry(
 ) -> NTSTATUS {
     dbg_break();
 
-    wdrf::Framework::run_entry(driver, registry_path, driver_main)
+    let framework = MinifilterFrameworkBuilder::new(
+        NonNull::new(driver).unwrap(),
+        NtUnicode::new(&*registry_path),
+    )
+    .unload(unload_callback)
+    .build()
+    .map_or(default, f);
+
+    STATUS_SUCCESS
+}
+
+pub fn unload_callback(_framework: &mut MinifilterFramework) -> anyhow::Result<()> {
+    Ok(())
 }

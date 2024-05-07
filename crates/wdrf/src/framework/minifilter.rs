@@ -8,7 +8,7 @@ use wdk_sys::{
     },
     DRIVER_OBJECT, NTSTATUS, NT_SUCCESS, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
 };
-use wdrf_std::string::ntunicode::NtUnicode;
+use wdrf_std::{boxed::Box, string::ntunicode::NtUnicode};
 
 use super::builder::{DriverFramework, FrameworkBuilder};
 
@@ -30,7 +30,7 @@ impl MinifilterFrameworkBuilder {
         }
     }
 
-    pub fn context(&mut self, context: &'static mut dyn Any) -> &mut Self {
+    pub fn context(&mut self, context: Box<dyn Any>) -> &mut Self {
         self.inner_builder.context(context);
         self
     }
@@ -41,7 +41,7 @@ impl MinifilterFrameworkBuilder {
         self
     }
 
-    pub fn build(self) -> anyhow::Result<MinifilterFramework> {
+    pub fn build(&mut self) -> anyhow::Result<MinifilterFramework> {
         let mut filter = core::ptr::null_mut();
         unsafe {
             let mut registration = self.registration.build()?;
@@ -69,6 +69,7 @@ impl MinifilterFrameworkBuilder {
 }
 
 pub struct MinifilterFramework {
+    #[allow(dead_code)]
     framework: &'static mut DriverFramework,
     unload: Option<FilterUnload>,
     flt_filter: NonNull<_FLT_FILTER>,
@@ -124,7 +125,7 @@ impl FltRegistrationBuilder {
         self
     }
 
-    pub fn build(self) -> anyhow::Result<FLT_REGISTRATION> {
+    pub fn build(&mut self) -> anyhow::Result<FLT_REGISTRATION> {
         unsafe {
             if let Some(context) = self.context.last() {
                 anyhow::ensure!(

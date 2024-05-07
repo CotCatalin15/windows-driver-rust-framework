@@ -1,13 +1,14 @@
 use wdk_sys::ntddk::RtlCompareUnicodeString;
 use wdk_sys::UNICODE_STRING;
 
+#[derive(Clone, Copy)]
 pub struct NtUnicode<'a> {
     data: UNICODE_STRING,
     pub str: &'a [u16],
 }
 
 impl<'a> NtUnicode<'a> {
-    pub fn new(unicode: &'a mut UNICODE_STRING) -> Self {
+    pub fn new(unicode: &'a UNICODE_STRING) -> Self {
         Self {
             data: *unicode,
             str: unsafe { core::slice::from_raw_parts_mut(unicode.Buffer, unicode.Length as _) },
