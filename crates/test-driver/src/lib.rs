@@ -1,6 +1,6 @@
 #![no_std]
 
-use core::{panic::PanicInfo, ptr::NonNull};
+use core::{mem::MaybeUninit, panic::PanicInfo, ptr::NonNull};
 
 use collector::TestProcessCollector;
 use wdk::{dbg_break, println};
@@ -11,13 +11,16 @@ use wdk_alloc::WDKAllocator;
 #[global_allocator]
 static GLOBAL_ALLOCATOR: WDKAllocator = WDKAllocator;
 
-use wdk_sys::{ntddk::KeBugCheckEx, DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING, STATUS_SUCCESS};
+use wdk_sys::{ntddk::KeBugCheckEx, DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING};
 use wdrf::{
-    driver::{DriverDispatch, DriverObject},
     framework::minifilter::{MinifilterFramework, MinifilterFrameworkBuilder},
     process::collector::ProcessRegistry,
 };
-use wdrf_std::{kmalloc::TaggedObject, string::ntunicode::NtUnicode};
+use wdrf_std::{
+    boxed::{Box, BoxExt},
+    kmalloc::TaggedObject,
+    string::ntunicode::NtUnicode,
+};
 
 pub mod collector;
 
@@ -33,6 +36,8 @@ struct TestDriverContext {
     collector: ProcessRegistry<TestProcessCollector>,
 }
 
+impl TaggedObject for TestDriverContext {}
+
 ///# Safety
 ///
 /// Its safe its just for testing
@@ -44,15 +49,25 @@ pub unsafe extern "system" fn driver_entry(
 ) -> NTSTATUS {
     dbg_break();
 
-    let framework = MinifilterFrameworkBuilder::new(
+    MinifilterFrameworkBuilder::start_builder(
         NonNull::new(driver).unwrap(),
         NtUnicode::new(&*registry_path),
+        framework_main,
     )
-    .unload(unload_callback)
-    .build()
-    .map_or(default, f);
+}
 
-    STATUS_SUCCESS
+fn framework_main(builder: &mut MinifilterFrameworkBuilder) -> anyhow::Result<()> {
+    dbg_break();
+
+    let context = Box::try_create(TestDriverContext {
+        collector: ProcessRegistry::new(TestProcessCollector::new()),
+    })?;
+
+    println!("Building the minifilter");
+
+    let _minifilter = builder.unload(unload_callback).context(context).build()?;
+
+    Ok(())
 }
 
 pub fn unload_callback(_framework: &mut MinifilterFramework) -> anyhow::Result<()> {

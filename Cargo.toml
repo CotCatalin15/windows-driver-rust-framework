@@ -26,6 +26,8 @@ wdk-macros = { git = "https://github.com/CotCatalin15/windows-drivers-rs", versi
 wdk-alloc = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
 wdk-panic = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
 
+derive_builder = { version = "0.20.0" }
+
 #Error crates
 anyhow = { version = "1.0.35", default-features = false }
 thiserror = { version = "1.0", package = "thiserror-core", default-features = false }

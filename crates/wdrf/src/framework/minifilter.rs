@@ -1,10 +1,12 @@
 use core::{any::Any, ptr::NonNull};
 
+use wdk::dbg_break;
 use wdk_sys::{
     fltmgr::{
-        FltRegisterFilter, FltUnregisterFilter, FLT_CONTEXT_END, FLT_CONTEXT_REGISTRATION,
-        FLT_FILTER_UNLOAD_FLAGS, FLT_OPERATION_REGISTRATION, FLT_REGISTRATION,
-        FLT_REGISTRATION_VERSION, _FLT_FILTER,
+        FltRegisterFilter, FltStartFiltering, FltUnregisterFilter, FLT_CONTEXT_END,
+        FLT_CONTEXT_REGISTRATION, FLT_FILTER_UNLOAD_FLAGS, FLT_INSTANCE_QUERY_TEARDOWN_FLAGS,
+        FLT_OPERATION_REGISTRATION, FLT_REGISTRATION, FLT_REGISTRATION_VERSION,
+        PCFLT_RELATED_OBJECTS, _FLT_FILTER,
     },
     DRIVER_OBJECT, NTSTATUS, NT_SUCCESS, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
 };
@@ -30,6 +32,25 @@ impl MinifilterFrameworkBuilder {
         }
     }
 
+    pub fn start_builder<F>(
+        driver: NonNull<DRIVER_OBJECT>,
+        registry: NtUnicode<'static>,
+        main: F,
+    ) -> NTSTATUS
+    where
+        F: FnOnce(&mut MinifilterFrameworkBuilder) -> anyhow::Result<()>,
+    {
+        let mut builder = MinifilterFrameworkBuilder::new(driver, registry);
+        if let Err(_) = main(&mut builder) {
+            STATUS_UNSUCCESSFUL
+        } else {
+            match builder.build() {
+                Ok(_) => STATUS_SUCCESS,
+                Err(_) => STATUS_UNSUCCESSFUL,
+            }
+        }
+    }
+
     pub fn context(&mut self, context: Box<dyn Any>) -> &mut Self {
         self.inner_builder.context(context);
         self
@@ -41,7 +62,15 @@ impl MinifilterFrameworkBuilder {
         self
     }
 
-    pub fn build(&mut self) -> anyhow::Result<MinifilterFramework> {
+    pub fn registration<F>(&mut self, builder: F) -> &mut Self
+    where
+        F: FnOnce(&mut FltRegistrationBuilder),
+    {
+        builder(&mut self.registration);
+        self
+    }
+
+    pub fn build(&mut self) -> anyhow::Result<&'static mut MinifilterFramework> {
         let mut filter = core::ptr::null_mut();
         unsafe {
             let mut registration = self.registration.build()?;
@@ -57,14 +86,16 @@ impl MinifilterFrameworkBuilder {
                 !filter.is_null(),
                 "FltREgisterFilter returned a null filter"
             );
-        }
-        let flt_filter = NonNull::new(filter).unwrap();
+            let flt_filter = NonNull::new(filter).unwrap();
 
-        Ok(MinifilterFramework {
-            framework: self.inner_builder.build(),
-            unload: self.unload,
-            flt_filter: flt_filter,
-        })
+            GLOBAL_MINIFILTER_FRAMEWORK = Some(MinifilterFramework {
+                framework: self.inner_builder.build(),
+                unload: self.unload,
+                flt_filter: flt_filter.clone(),
+            });
+
+            Ok(GLOBAL_MINIFILTER_FRAMEWORK.as_mut().unwrap())
+        }
     }
 }
 
@@ -78,6 +109,28 @@ pub struct MinifilterFramework {
 impl MinifilterFramework {
     pub fn get() -> &'static mut Self {
         unsafe { GLOBAL_MINIFILTER_FRAMEWORK.as_mut().unwrap() }
+    }
+
+    pub fn context<C>() -> Option<&'static C> {
+        unsafe {
+            GLOBAL_MINIFILTER_FRAMEWORK
+                .as_ref()?
+                .framework
+                .context
+                .as_ref()?
+                .downcast_ref()
+        }
+    }
+
+    pub fn start_filtering(&mut self) -> anyhow::Result<()> {
+        unsafe {
+            let status = FltStartFiltering(self.flt_filter.as_ptr());
+            if NT_SUCCESS(status) {
+                Ok(())
+            } else {
+                Err(anyhow::Error::msg("Failed to start filtering"))
+            }
+        }
     }
 }
 
@@ -93,8 +146,8 @@ impl Drop for MinifilterFramework {
 pub struct FltRegistrationBuilder {
     flags: u32,
     unload: Option<FilterUnload>,
-    context: &'static [FLT_CONTEXT_REGISTRATION],
-    callbacks: &'static [FLT_OPERATION_REGISTRATION],
+    context: Option<&'static [FLT_CONTEXT_REGISTRATION]>,
+    callbacks: Option<&'static [FLT_OPERATION_REGISTRATION]>,
 }
 
 impl FltRegistrationBuilder {
@@ -116,25 +169,25 @@ impl FltRegistrationBuilder {
         &mut self,
         context: &'static [FLT_CONTEXT_REGISTRATION],
     ) -> &mut Self {
-        self.context = context;
+        self.context = Some(context);
         self
     }
 
     pub fn callbacks(&mut self, callbacks: &'static [FLT_OPERATION_REGISTRATION]) -> &mut Self {
-        self.callbacks = callbacks;
+        self.callbacks = Some(callbacks);
         self
     }
 
     pub fn build(&mut self) -> anyhow::Result<FLT_REGISTRATION> {
         unsafe {
-            if let Some(context) = self.context.last() {
+            if let Some(context) = self.context.as_ref().and_then(|ctx| ctx.last()) {
                 anyhow::ensure!(
                     context.ContextType != FLT_CONTEXT_END as _,
                     "Last context value is not FLT_CONTEXT_END"
                 );
             }
 
-            if let Some(operation) = self.callbacks.last() {
+            if let Some(operation) = self.callbacks.as_ref().and_then(|ctx| ctx.last()) {
                 anyhow::ensure!(
                     operation.MajorFunction != IRP_MJ_OPERATION_END,
                     "Last context value is not FLT_CONTEXT_END"
@@ -145,9 +198,14 @@ impl FltRegistrationBuilder {
                 Size: core::mem::size_of::<FLT_REGISTRATION>() as _,
                 Version: FLT_REGISTRATION_VERSION as _,
                 Flags: self.flags,
-                ContextRegistration: self.context.as_ptr(),
-                OperationRegistration: self.callbacks.as_ptr(),
+                ContextRegistration: self
+                    .context
+                    .map_or_else(|| core::ptr::null(), |ctx| ctx.as_ptr()),
+                OperationRegistration: self
+                    .callbacks
+                    .map_or_else(|| core::ptr::null() as _, |op| op.as_ptr()),
                 FilterUnloadCallback: self.unload.map(|_| minifilter_unload_callback as _),
+                InstanceQueryTeardownCallback: Some(minifilter_instance_teardown),
                 ..core::mem::zeroed::<FLT_REGISTRATION>()
             })
         }
@@ -156,7 +214,24 @@ impl FltRegistrationBuilder {
 
 static mut GLOBAL_MINIFILTER_FRAMEWORK: Option<MinifilterFramework> = None;
 
+/*
+NTSTATUS
+NullQueryTeardown (
+    _In_ PCFLT_RELATED_OBJECTS FltObjects,
+    _In_ FLT_INSTANCE_QUERY_TEARDOWN_FLAGS Flags
+    )
+ */
+
+unsafe extern "C" fn minifilter_instance_teardown(
+    _objects: PCFLT_RELATED_OBJECTS,
+    _flags: FLT_INSTANCE_QUERY_TEARDOWN_FLAGS,
+) -> NTSTATUS {
+    STATUS_SUCCESS
+}
+
 unsafe extern "C" fn minifilter_unload_callback(_flags: FLT_FILTER_UNLOAD_FLAGS) -> NTSTATUS {
+    dbg_break();
+
     if let Some(mut framework) = GLOBAL_MINIFILTER_FRAMEWORK.take() {
         if let Some(cb) = framework.unload {
             match cb(&mut framework) {

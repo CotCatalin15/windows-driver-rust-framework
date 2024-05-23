@@ -4,6 +4,7 @@
 pub mod driver;
 pub mod framework;
 pub mod minifilter;
+pub mod object;
 pub mod process;
 
 use driver::{DriverDispatch, DriverObject};

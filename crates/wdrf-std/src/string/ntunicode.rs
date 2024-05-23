@@ -33,6 +33,14 @@ impl<'a> NtUnicode<'a> {
     pub fn ends_with(&self, sufix: &NtUnicode) -> bool {
         self.str.ends_with(sufix.str)
     }
+
+    pub unsafe fn as_unicode_ref(&self) -> &UNICODE_STRING {
+        &self.data
+    }
+
+    pub unsafe fn as_unicode_ref_mut(&mut self) -> &mut UNICODE_STRING {
+        &mut self.data
+    }
 }
 
 impl<'a, 'b> PartialEq<NtUnicode<'b>> for NtUnicode<'a> {

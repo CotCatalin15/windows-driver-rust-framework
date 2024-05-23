@@ -1,4 +1,4 @@
-use core::{any::Any, borrow::Borrow, ptr::NonNull};
+use core::{any::Any, ptr::NonNull};
 
 use wdk_sys::DRIVER_OBJECT;
 use wdrf_std::{boxed::Box, string::ntunicode::NtUnicode};
