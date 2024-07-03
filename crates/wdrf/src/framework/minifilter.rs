@@ -1,6 +1,5 @@
 use core::{any::Any, ptr::NonNull};
 
-use wdk::dbg_break;
 use wdk_sys::{
     fltmgr::{
         FltRegisterFilter, FltStartFiltering, FltUnregisterFilter, FLT_CONTEXT_END,
@@ -41,12 +40,14 @@ impl MinifilterFrameworkBuilder {
         F: FnOnce(&mut MinifilterFrameworkBuilder) -> anyhow::Result<()>,
     {
         let mut builder = MinifilterFrameworkBuilder::new(driver, registry);
-        if let Err(_) = main(&mut builder) {
-            STATUS_UNSUCCESSFUL
-        } else {
-            match builder.build() {
-                Ok(_) => STATUS_SUCCESS,
-                Err(_) => STATUS_UNSUCCESSFUL,
+        let result = main(&mut builder);
+        match result {
+            Ok(_) => STATUS_SUCCESS,
+            Err(_) => {
+                unsafe {
+                    core::mem::drop(GLOBAL_MINIFILTER_FRAMEWORK.take());
+                }
+                STATUS_UNSUCCESSFUL
             }
         }
     }
@@ -111,14 +112,14 @@ impl MinifilterFramework {
         unsafe { GLOBAL_MINIFILTER_FRAMEWORK.as_mut().unwrap() }
     }
 
-    pub fn context<C>() -> Option<&'static C> {
+    pub fn context<C>() -> Option<&'static mut C> {
         unsafe {
             GLOBAL_MINIFILTER_FRAMEWORK
-                .as_ref()?
+                .as_mut()?
                 .framework
                 .context
-                .as_ref()?
-                .downcast_ref()
+                .as_mut()?
+                .downcast_mut()
         }
     }
 
@@ -131,6 +132,10 @@ impl MinifilterFramework {
                 Err(anyhow::Error::msg("Failed to start filtering"))
             }
         }
+    }
+
+    pub fn filter(&self) -> NonNull<_FLT_FILTER> {
+        self.flt_filter
     }
 }
 
@@ -230,8 +235,6 @@ unsafe extern "C" fn minifilter_instance_teardown(
 }
 
 unsafe extern "C" fn minifilter_unload_callback(_flags: FLT_FILTER_UNLOAD_FLAGS) -> NTSTATUS {
-    dbg_break();
-
     if let Some(mut framework) = GLOBAL_MINIFILTER_FRAMEWORK.take() {
         if let Some(cb) = framework.unload {
             match cb(&mut framework) {

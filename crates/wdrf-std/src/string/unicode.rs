@@ -38,13 +38,13 @@ impl UnicodeString {
             .map_err(|_| anyhow::Error::msg("Failed to reserver exact for unicode string"))?;
 
         //PANIC: Can panic if src.len != self.len
-        buffer.copy_from_slice(&str);
+        buffer.copy_from_slice(str);
 
         Ok(Self { vec: buffer })
     }
 
     pub fn from_unicode(unicode: &NtUnicode) -> anyhow::Result<Self> {
-        Self::from_u16(&unicode.str)
+        Self::from_u16(unicode.str)
     }
 
     #[inline]
@@ -109,6 +109,11 @@ impl UnicodeString {
     }
 
     #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.vec.capacity()
     }
@@ -117,7 +122,7 @@ impl UnicodeString {
 impl PartialEq<UnicodeString> for UnicodeString {
     #[inline]
     fn eq(&self, other: &UnicodeString) -> bool {
-        self.vec == other.vec
+        self.cmp(other).is_eq()
     }
 }
 

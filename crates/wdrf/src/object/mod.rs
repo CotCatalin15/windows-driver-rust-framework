@@ -1,7 +1,7 @@
 use wdk::nt_success;
 use wdk_sys::{
     fltmgr::{FltBuildDefaultSecurityDescriptor, FltFreeSecurityDescriptor, FLT_PORT_ALL_ACCESS},
-    OBJECT_ATTRIBUTES, PSECURITY_DESCRIPTOR, SECURITY_DESCRIPTOR,
+    OBJECT_ATTRIBUTES, PSECURITY_DESCRIPTOR,
 };
 use wdrf_std::string::ntunicode::NtUnicode;
 
@@ -31,28 +31,29 @@ impl Drop for SecurityDescriptor {
 }
 
 pub struct ObjectAttribs<'a> {
-    sd : &'a SecurityDescriptor,
-    attribs : OBJECT_ATTRIBUTES 
-};
+    _sd: &'a SecurityDescriptor,
+    attribs: OBJECT_ATTRIBUTES,
+}
 
 impl<'a> ObjectAttribs<'a> {
     pub fn new(
-        mut name: NtUnicode<'static>,
+        name: &'a mut NtUnicode<'static>,
         attrib_flags: u32,
         descriptor: &'a SecurityDescriptor,
     ) -> ObjectAttribs<'a> {
+        panic!("This aint ok");
 
         let obj_attribs = OBJECT_ATTRIBUTES {
             Length: core::mem::size_of::<OBJECT_ATTRIBUTES>() as _,
             RootDirectory: core::ptr::null_mut(),
-            ObjectName: unsafe { name.as_unicode_ref_mut() },
+            ObjectName: core::ptr::null_mut(),
             Attributes: attrib_flags,
             SecurityDescriptor: descriptor.0,
             SecurityQualityOfService: core::ptr::null_mut(),
         };
 
-        ObjectAttribs{
-            sd: descriptor,
+        ObjectAttribs {
+            _sd: descriptor,
             attribs: obj_attribs,
         }
     }

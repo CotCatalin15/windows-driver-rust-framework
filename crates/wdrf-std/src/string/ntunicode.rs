@@ -16,10 +16,17 @@ impl<'a> NtUnicode<'a> {
     }
 
     pub fn new_from_slice(slice: &'a [u16]) -> Self {
+        let is_null_terminated = slice.last().map_or_else(|| false, |l| *l == 0);
+        let len = if is_null_terminated {
+            slice.len() - 1
+        } else {
+            slice.len()
+        };
+
         Self {
             data: UNICODE_STRING {
-                Length: slice.len() as _,
-                MaximumLength: slice.len() as _,
+                Length: (len * 2) as _,
+                MaximumLength: (slice.len() * 2) as _,
                 Buffer: slice.as_ptr() as _,
             },
             str: slice,
@@ -34,12 +41,12 @@ impl<'a> NtUnicode<'a> {
         self.str.ends_with(sufix.str)
     }
 
-    pub unsafe fn as_unicode_ref(&self) -> &UNICODE_STRING {
-        &self.data
-    }
-
-    pub unsafe fn as_unicode_ref_mut(&mut self) -> &mut UNICODE_STRING {
-        &mut self.data
+    ///
+    /// # Safety
+    ///
+    /// Pointer pointed by UNICODE_STRING can become invalid
+    pub unsafe fn as_unicode(&mut self) -> UNICODE_STRING {
+        self.data
     }
 }
 

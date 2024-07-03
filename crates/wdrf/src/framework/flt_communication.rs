@@ -1,177 +1,202 @@
-use core::{any::Any, ffi::c_void, mem::MaybeUninit, num::NonZeroU32, pin::Pin, ptr::NonNull};
+use core::{num::NonZeroU32, ptr::NonNull};
 
-use derive_builder::Builder;
+use wdk::nt_success;
 use wdk_sys::{
     fltmgr::{
-        FltCloseCommunicationPort, FltCreateCommunicationPort, NTSTATUS, PFLT_PORT, _FLT_FILTER,
+        FltCloseClientPort, FltCloseCommunicationPort, FltCreateCommunicationPort,
+        PFLT_CONNECT_NOTIFY, PFLT_DISCONNECT_NOTIFY, PFLT_MESSAGE_NOTIFY, PFLT_PORT, _FLT_FILTER,
         _FLT_PORT,
     },
-    OBJ_CASE_INSENSITIVE, OBJ_KERNEL_HANDLE, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
+    NTSTATUS, OBJ_CASE_INSENSITIVE, OBJ_KERNEL_HANDLE, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
 };
 use wdrf_std::{
     boxed::{Box, BoxExt},
     kmalloc::TaggedObject,
+    slice::{
+        slice_from_raw_parts_mut_or_empty, slice_from_raw_parts_or_empty,
+        tracked_slice::TrackedSlice,
+    },
     string::ntunicode::NtUnicode,
 };
 
 use crate::object::{ObjectAttribs, SecurityDescriptor};
 
-pub type FltCommunicationDisconnect = fn(cookie: Option<&mut dyn Any>);
-pub type FltCommunicationNotify =
-    fn(cookie: Option<&mut dyn Any>, input: &[u8], output: &mut [u8]) -> anyhow::Result<u32>;
+pub struct FltPort(NonNull<_FLT_PORT>);
 
-pub type FltCommunicationConnect =
-    fn(server_cookie: Option<&mut dyn Any>) -> anyhow::Result<Option<Box<dyn Any>>>;
-
-#[derive(Builder)]
-#[builder(no_std)]
-pub struct FltCommunicationDispatch {
-    disconnect: Option<FltCommunicationDisconnect>,
-    notify: Option<FltCommunicationNotify>,
-}
-
-struct FltCommunicationCookie {
-    communication: NonNull<FltCommunication>,
-    cookie: Option<Box<dyn Any>>,
-    dispatch: FltCommunicationDispatch,
-}
-
-impl TaggedObject for FltCommunicationCookie {
-    fn tag() -> wdrf_std::kmalloc::MemoryTag {
-        wdrf_std::kmalloc::MemoryTag::new_from_bytes(b"flck")
-    }
-}
-
-pub struct FltCommunication {
-    port: NonNull<_FLT_PORT>,
-    cookie: Box<FltCommunicationCookie>,
-}
-
-impl Drop for FltCommunication {
-    fn drop(&mut self) {
-        unsafe {
-            FltCloseCommunicationPort(self.port.as_ptr());
-        }
-    }
-}
-
-impl FltCommunication {
-    pub(super) fn try_create<C>(
-        name: NtUnicode<'static>,
+impl FltPort {
+    pub fn try_create(
+        filter: NonNull<_FLT_FILTER>,
+        name: &mut NtUnicode<'static>,
         max_connections: NonZeroU32,
-        user_cookie: Option<Box<dyn Any>>,
-        dispatch: FltCommunicationDispatch,
-    ) -> anyhow::Result<FltCommunication> {
-        unsafe {
-            let mut port = core::ptr::null_mut();
+        cookie: NonNull<u8>,
+        connect: PFLT_CONNECT_NOTIFY,
+        disconnect: PFLT_DISCONNECT_NOTIFY,
+        notify: PFLT_MESSAGE_NOTIFY,
+    ) -> anyhow::Result<FltPort> {
+        let mut port = core::ptr::null_mut();
 
-            let security_desc = SecurityDescriptor::try_default_flt()?;
-            let mut object_attr = ObjectAttribs::new(
-                name,
-                OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
-                &security_desc,
-            );
+        let security_desc = SecurityDescriptor::try_default_flt()?;
+        let mut object_attr = ObjectAttribs::new(
+            name,
+            OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
+            &security_desc,
+        );
 
-            let mut cookie = Box::try_create(FltCommunicationCookie {
-                communication: NonNull::dangling(),
-                cookie: user_cookie,
-                dispatch,
-            })?;
-
-            let pt: *mut FltCommunicationCookie = cookie.as_mut();
-
+        let status = unsafe {
             FltCreateCommunicationPort(
                 filter.as_ptr(),
-                port,
+                &mut port,
                 object_attr.as_ptr_mut() as _,
-                pt as _,
-                MessageNotifyCallback,
-                Some(flt_comm_disconnect),
-                Some(flt_comm_notify),
+                cookie.as_ptr() as _,
+                connect,
+                disconnect,
+                notify,
                 max_connections.get() as _,
-            );
+            )
+        };
+        if nt_success(status) {
+            let port = NonNull::new(port).unwrap();
+            Ok(FltPort(port))
+        } else {
+            Err(anyhow::Error::msg("test"))
         }
-
-        return Err(anyhow::Error::msg("Failed to create communication"));
     }
 }
 
-unsafe extern "C" fn flt_comm_disconnect(cookie: *mut core::ffi::c_void) {
-    let cookie: *mut dyn Any = cookie as _;
-    let mut cookie = &mut *cookie;
-
-    let cookie = cookie
-        .downcast_mut::<FltCommunicationCookie>()
-        .unwrap_unchecked();
-
-    if let Some(ref cb) = cookie.dispatch.disconnect {
-        let context = cookie.cookie.as_mut().map(|b| b.as_mut());
-        cb(context);
+impl Drop for FltPort {
+    fn drop(&mut self) {
+        unsafe { FltCloseCommunicationPort(self.0.as_ptr()) }
     }
 }
 
-unsafe extern "C" fn flt_comm_notify(
-    cookie: *mut core::ffi::c_void,
+pub struct FltClient(NonNull<_FLT_FILTER>, NonNull<_FLT_PORT>);
+
+impl FltClient {
+    pub fn new(filter: NonNull<_FLT_FILTER>, client: NonNull<_FLT_PORT>) -> Self {
+        Self(filter, client)
+    }
+}
+
+impl Drop for FltClient {
+    fn drop(&mut self) {
+        unsafe {
+            FltCloseClientPort(self.0.as_ptr(), &mut self.1.as_ptr());
+        }
+    }
+}
+
+pub trait FltCommunicationDispatch {
+    fn on_connect(&mut self, client_port: &mut FltClient, context: &[u8]) -> anyhow::Result<()>;
+    fn on_disconnect(&mut self, client: FltClient);
+
+    fn on_notify(&mut self, input: &[u8], output: &mut TrackedSlice) -> anyhow::Result<()>;
+}
+
+struct FltCookie<T: FltCommunicationDispatch> {
+    filter: NonNull<_FLT_FILTER>,
+    client: Option<FltClient>,
+    dispatch: T,
+}
+
+impl<T> TaggedObject for FltCookie<T> where T: FltCommunicationDispatch {}
+
+pub struct FltSingleClientCommunication<T: FltCommunicationDispatch> {
+    port: FltPort,
+    cookie: Box<FltCookie<T>>,
+}
+
+impl<T> FltSingleClientCommunication<T>
+where
+    T: FltCommunicationDispatch + 'static + Send + Sync,
+{
+    pub fn try_create(
+        filter: NonNull<_FLT_FILTER>,
+        name: &mut NtUnicode<'static>,
+        dispatch: T,
+    ) -> anyhow::Result<Self> {
+        let mut cookie = Box::try_create(FltCookie {
+            filter,
+            client: None,
+            dispatch,
+        })?;
+
+        let ptr: *mut FltCookie<T> = cookie.as_mut();
+        let port = FltPort::try_create(
+            filter,
+            name,
+            NonZeroU32::new(1).unwrap(),
+            NonNull::new(ptr).unwrap().cast(),
+            Some(flt_comm_connection::<T>),
+            Some(flt_comm_disconnect::<T>),
+            Some(flt_comm_notify::<T>),
+        )?;
+
+        Ok(Self { port, cookie })
+    }
+}
+
+unsafe extern "C" fn flt_comm_connection<T: FltCommunicationDispatch>(
+    client_port: PFLT_PORT,
+    server_cookie: *mut core::ffi::c_void,
+    connection_context: *mut core::ffi::c_void,
+    size_of_context: u32,
+    connection_port_cookie: *mut *mut core::ffi::c_void,
+) -> NTSTATUS {
+    let cookie_ptr: *mut FltCookie<T> = server_cookie as _;
+    let cookie = &mut *cookie_ptr;
+
+    let mut client = FltClient::new(cookie.filter, NonNull::new(client_port).unwrap());
+
+    let result = cookie.dispatch.on_connect(
+        &mut client,
+        slice_from_raw_parts_or_empty(connection_context as _, size_of_context as _),
+    );
+
+    match result {
+        Ok(_) => {
+            *connection_port_cookie = cookie_ptr as _;
+            cookie.client = Some(client);
+            STATUS_SUCCESS
+        }
+        Err(_) => STATUS_UNSUCCESSFUL,
+    }
+}
+
+unsafe extern "C" fn flt_comm_disconnect<T: FltCommunicationDispatch>(
+    client_cookie: *mut core::ffi::c_void,
+) {
+    let cookie: *mut FltCookie<T> = client_cookie as _;
+    let cookie = &mut *cookie;
+
+    let client = cookie.client.take().unwrap();
+    cookie.dispatch.on_disconnect(client);
+}
+
+unsafe extern "C" fn flt_comm_notify<T: FltCommunicationDispatch>(
+    client_cookie: *mut core::ffi::c_void,
     input_buffer: *mut core::ffi::c_void,
     input_buffer_length: u32,
     output_buffer: *mut core::ffi::c_void,
     output_buffer_length: u32,
     return_output_buffer_length: *mut u32,
 ) -> NTSTATUS {
-    let cookie: *mut dyn Any = cookie as _;
-    let mut cookie = &mut *cookie;
+    let cookie: *mut FltCookie<T> = client_cookie as _;
+    let cookie = &mut *cookie;
 
-    let cookie = cookie
-        .downcast_mut::<FltCommunicationCookie>()
-        .unwrap_unchecked();
+    let mut tracked = TrackedSlice::new(slice_from_raw_parts_mut_or_empty(
+        output_buffer as _,
+        output_buffer_length as _,
+    ));
+    let result = cookie.dispatch.on_notify(
+        slice_from_raw_parts_or_empty(input_buffer as _, input_buffer_length as _),
+        &mut tracked,
+    );
 
-    if let Some(ref cb) = cookie.dispatch.notify {
-        let input: &mut [u8] = unsafe {
-            core::slice::from_raw_parts_mut(input_buffer as *mut u8, input_buffer_length as _)
-        };
-
-        let mut output: &mut [u8] = unsafe {
-            core::slice::from_raw_parts_mut(output_buffer as *mut u8, output_buffer_length as _)
-        };
-
-        let context = cookie.cookie.as_mut().map(|b| b.as_mut());
-        if let Ok(bytes_written) = cb(context, &input, &mut output) {
-            if bytes_written >= output.len() {
-                //TODO: replace panic with a log and status error
-                panic!("Bytes writen greater than avalible");
-            }
+    match result {
+        Ok(_) => {
+            *return_output_buffer_length = tracked.bytes_written() as _;
             STATUS_SUCCESS
-        } else {
-            STATUS_UNSUCCESSFUL
         }
-    } else {
-        STATUS_SUCCESS
+        Err(_) => STATUS_UNSUCCESSFUL,
     }
-}
-
-/*
-typedef NTSTATUS
-(*PFLT_CONNECT_NOTIFY) (
-      IN PFLT_PORT ClientPort,
-      IN PVOID ServerPortCookie,
-      IN PVOID ConnectionContext,
-      IN ULONG SizeOfContext,
-      OUT PVOID *ConnectionPortCookie
-      );
- */
-unsafe extern "C" fn flt_comm_connection(
-    client_port: PFLT_PORT,
-    server_cookie: *mut core::ffi::c_void,
-    connection_context: *mut core::ffi::c_void,
-    size_of_context: *mut u32,
-    connection_port_cookie: *mut *mut core::ffi::c_void,
-) -> NTSTATUS {
-    let server_cookie: *mut dyn Any = server_cookie as _;
-    let mut cookie = &mut *server_cookie;
-
-    let cookie = cookie
-        .downcast_mut::<FltCommunicationCookie>()
-        .unwrap_unchecked();
-
-    STATUS_SUCCESS
 }
