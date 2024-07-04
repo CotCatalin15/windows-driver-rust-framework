@@ -16,11 +16,7 @@ use wdk_sys::{
     ntddk::KeBugCheckEx, DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING, STATUS_SUCCESS,
     STATUS_UNSUCCESSFUL,
 };
-use wdrf::context::{Context, ContextRegistry};
-use wdrf::framework::minifilter::MinifilterFrameworkBuilder;
-use wdrf::{
-    context::FixedGlobalContextRegistry, framework::flt_communication::FltSingleClientCommunication,
-};
+use wdrf::context::{Context, ContextRegistry, FixedGlobalContextRegistry};
 use wdrf_std::kmalloc::TaggedObject;
 
 pub mod collector;
