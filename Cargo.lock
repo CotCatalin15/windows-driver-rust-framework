@@ -975,6 +975,7 @@ dependencies = [
  "wdk",
  "wdk-sys",
  "wdrf-std",
+ "widestring",
 ]
 
 [[package]]

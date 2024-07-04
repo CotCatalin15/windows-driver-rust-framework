@@ -69,3 +69,17 @@ impl<'a> Ord for NtUnicode<'a> {
         self.str.cmp(&other.str)
     }
 }
+
+pub trait AsUnicodeString {
+    unsafe fn as_unicode(&self) -> UNICODE_STRING;
+}
+
+impl AsUnicodeString for widestring::U16CStr {
+    unsafe fn as_unicode(&self) -> UNICODE_STRING {
+        UNICODE_STRING {
+            Length: (self.len() * 2) as _,
+            MaximumLength: ((self.len() + 1) * 2) as _,
+            Buffer: self.as_ptr() as _,
+        }
+    }
+}

@@ -1,10 +1,8 @@
 use core::{
     cell::SyncUnsafeCell,
     mem::MaybeUninit,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
-
-use wdrf_std::sync::mutex::SpinMutex;
 
 ///
 /// Usefull for storing static global data
@@ -12,11 +10,11 @@ use wdrf_std::sync::mutex::SpinMutex;
 
 struct FixedRegistryInternal<const SIZE: usize> {
     array: [MaybeUninit<&'static dyn ContextDrop>; SIZE],
-    size: usize,
+    size: AtomicU32,
 }
 
 pub struct FixedGlobalContextRegistry<const SIZE: usize> {
-    internal: SyncUnsafeCell<MaybeUninit<SpinMutex<FixedRegistryInternal<SIZE>>>>,
+    internal: SyncUnsafeCell<FixedRegistryInternal<SIZE>>,
 }
 
 unsafe impl<const SIZE: usize> Send for FixedGlobalContextRegistry<SIZE> {}
@@ -30,18 +28,10 @@ pub trait ContextRegistry {
 impl<const SIZE: usize> FixedGlobalContextRegistry<SIZE> {
     pub const fn new() -> Self {
         Self {
-            internal: SyncUnsafeCell::new(MaybeUninit::uninit()),
-        }
-    }
-
-    pub fn init(&self) {
-        unsafe {
-            let s = SpinMutex::new(FixedRegistryInternal::<SIZE> {
-                array: MaybeUninit::uninit().assume_init(),
-                size: 0,
-            });
-            let internal = &mut *self.internal.get();
-            *internal = MaybeUninit::new(s);
+            internal: SyncUnsafeCell::new(FixedRegistryInternal {
+                array: unsafe { MaybeUninit::uninit().assume_init() },
+                size: AtomicU32::new(0),
+            }),
         }
     }
 }
@@ -54,30 +44,30 @@ impl<const SIZE: usize> Default for FixedGlobalContextRegistry<SIZE> {
 
 impl<const SIZE: usize> ContextRegistry for FixedGlobalContextRegistry<SIZE> {
     fn register<T: Sized>(&self, context: &'static Context<T>) -> anyhow::Result<()> {
-        let guard = unsafe { &mut *self.internal.get() };
-        let mut guard = unsafe { guard.assume_init_mut() }.lock();
+        let inner = unsafe { &mut *self.internal.get() };
+        let pos = inner.size.fetch_add(1, Ordering::SeqCst) as usize;
 
-        if guard.size + 1 >= SIZE {
+        if pos > SIZE {
+            panic!("Meh");
             Err(anyhow::Error::msg("Fixed context registry is full"))
         } else {
             unsafe {
                 let val: &'static dyn ContextDrop = context;
-                let pos = guard.size;
-
-                *guard.array.get_unchecked_mut(pos) = MaybeUninit::new(val);
+                *inner.array.get_unchecked_mut(pos) = MaybeUninit::new(val);
             }
-            guard.size += 1;
 
             Ok(())
         }
     }
 
     fn drop_self(&self) {
-        let guard = unsafe { &mut *self.internal.get() };
-        let guard = unsafe { guard.assume_init_mut() }.lock();
+        let inner = unsafe { &mut *self.internal.get() };
+        let size = core::cmp::min(
+            inner.size.load(Ordering::SeqCst) as usize,
+            inner.array.len(),
+        );
 
-        let s = guard.size.clone();
-        for elem in &mut guard.array[0..s].iter().rev() {
+        for elem in &mut inner.array[0..size].iter().rev() {
             unsafe {
                 elem.assume_init().context_drop();
             }
