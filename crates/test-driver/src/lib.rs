@@ -21,7 +21,6 @@ use wdrf::context::{Context, ContextRegistry, FixedGlobalContextRegistry};
 use wdrf::minifilter::communication::{FltCommunication, FltCommunicationBuilder};
 use wdrf::minifilter::{FltFilter, FltRegistrationBuilder};
 use wdrf::object::{ObjectAttribs, SecurityDescriptor};
-use wdrf_std::kmalloc::TaggedObject;
 use wdrf_std::slice::slice_from_raw_parts_mut_or_empty;
 use wdrf_std::string::ntunicode::AsUnicodeString;
 use wdrf_std::sync::arc::{Arc, ArcExt};
@@ -94,10 +93,15 @@ fn driver_main(
     let comm = create_communication(&filter)?;
     let comm = Arc::try_create(comm)?;
 
+    unsafe {
+        filter.start_filtering()?;
+    }
+
     DRIVER_CONTEXT.init(&CONTEXT_REGISTRY, || TestDriverContext {
         filter,
         communication: comm,
     })?;
+
     Ok(())
 }
 

@@ -2,9 +2,10 @@ use core::{mem::MaybeUninit, ptr::NonNull};
 
 use wdk_sys::{
     fltmgr::{
-        FltRegisterFilter, FltUnloadFilter, FltUnregisterFilter, FLT_CONTEXT_END,
-        FLT_REGISTRATION_VERSION, IRP_MJ_OPERATION_END, PFLT_FILTER_UNLOAD_CALLBACK,
-        _FLT_CONTEXT_REGISTRATION, _FLT_FILTER, _FLT_OPERATION_REGISTRATION, _FLT_REGISTRATION,
+        FltRegisterFilter, FltStartFiltering, FltUnloadFilter, FltUnregisterFilter,
+        FLT_CONTEXT_END, FLT_REGISTRATION_VERSION, IRP_MJ_OPERATION_END,
+        PFLT_FILTER_UNLOAD_CALLBACK, _FLT_CONTEXT_REGISTRATION, _FLT_FILTER,
+        _FLT_OPERATION_REGISTRATION, _FLT_REGISTRATION,
     },
     DRIVER_OBJECT,
 };
@@ -40,6 +41,15 @@ impl FltFilter {
 
     pub fn as_ptr(&self) -> NonNull<_FLT_FILTER> {
         self.0.clone()
+    }
+
+    pub unsafe fn start_filtering(&self) -> anyhow::Result<()> {
+        let status = FltStartFiltering(self.0.as_ptr());
+        if wdk::nt_success(status) {
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg("Failed to start filtering"))
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 use core::{
-    cell::SyncUnsafeCell,
+    cell::UnsafeCell,
     mem::MaybeUninit,
     sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
@@ -14,7 +14,7 @@ struct FixedRegistryInternal<const SIZE: usize> {
 }
 
 pub struct FixedGlobalContextRegistry<const SIZE: usize> {
-    internal: SyncUnsafeCell<FixedRegistryInternal<SIZE>>,
+    internal: UnsafeCell<FixedRegistryInternal<SIZE>>,
 }
 
 unsafe impl<const SIZE: usize> Send for FixedGlobalContextRegistry<SIZE> {}
@@ -28,7 +28,7 @@ pub trait ContextRegistry {
 impl<const SIZE: usize> FixedGlobalContextRegistry<SIZE> {
     pub const fn new() -> Self {
         Self {
-            internal: SyncUnsafeCell::new(FixedRegistryInternal {
+            internal: UnsafeCell::new(FixedRegistryInternal {
                 array: unsafe { MaybeUninit::uninit().assume_init() },
                 size: AtomicU32::new(0),
             }),
@@ -81,21 +81,24 @@ trait ContextDrop {
 
 pub struct Context<T: Sized> {
     is_init: AtomicBool,
-    data: SyncUnsafeCell<MaybeUninit<T>>,
+    data: UnsafeCell<MaybeUninit<T>>,
 }
+
+unsafe impl<T: Send> Send for Context<T> {}
+unsafe impl<T: Sync> Sync for Context<T> {}
 
 impl<T> Context<T> {
     pub const fn uninit() -> Self {
         Self {
             is_init: AtomicBool::new(false),
-            data: SyncUnsafeCell::new(MaybeUninit::uninit()),
+            data: UnsafeCell::new(MaybeUninit::uninit()),
         }
     }
 
     pub const fn new(data: T) -> Self {
         Self {
             is_init: AtomicBool::new(true),
-            data: SyncUnsafeCell::new(MaybeUninit::new(data)),
+            data: UnsafeCell::new(MaybeUninit::new(data)),
         }
     }
 
@@ -127,7 +130,7 @@ impl<T> Context<T> {
         unsafe { (*self.data.get()).assume_init_ref() }
     }
 
-    pub fn get_mut(&self) -> &'static mut T {
+    pub unsafe fn get_mut(&self) -> &'static mut T {
         unsafe { (*self.data.get()).assume_init_mut() }
     }
 }
