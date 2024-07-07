@@ -2,6 +2,7 @@
 #![feature(error_in_core)]
 #![feature(allocator_api)]
 #![feature(negative_impls)]
+#![feature(effects)]
 
 use thiserror::Error;
 use wdk_sys::{NTSTATUS, NT_SUCCESS};
@@ -10,7 +11,9 @@ extern crate alloc;
 
 pub mod boxed;
 pub mod hashbrown;
+pub mod io;
 pub mod kmalloc;
+pub mod slice;
 pub mod string;
 pub mod sync;
 pub mod traits;

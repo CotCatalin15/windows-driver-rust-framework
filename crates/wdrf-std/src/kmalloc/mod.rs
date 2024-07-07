@@ -96,6 +96,9 @@ pub struct GlobalKernelAllocator {
     fail_alloc: bool,
 }
 
+unsafe impl Send for GlobalKernelAllocator {}
+unsafe impl Sync for GlobalKernelAllocator {}
+
 impl GlobalKernelAllocator {
     pub fn new(tag: MemoryTag, flags: u64) -> Self {
         Self {

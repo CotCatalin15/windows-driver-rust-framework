@@ -108,7 +108,7 @@ pub struct ExSpinLock {
 unsafe impl DispatchSafe for ExSpinLock {}
 
 impl ExSpinLock {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         unsafe {
             let mutex = core::mem::zeroed();
             Self {

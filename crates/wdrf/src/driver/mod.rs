@@ -17,7 +17,7 @@ pub struct DriverDispatch {
 
 #[allow(dead_code)]
 pub struct DriverObject {
-    object: *mut DRIVER_OBJECT,
+    pub object: *mut DRIVER_OBJECT,
     registry: *const UNICODE_STRING,
     dispatch: DriverDispatch,
 }

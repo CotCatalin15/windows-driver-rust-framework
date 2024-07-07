@@ -38,13 +38,13 @@ impl UnicodeString {
             .map_err(|_| anyhow::Error::msg("Failed to reserver exact for unicode string"))?;
 
         //PANIC: Can panic if src.len != self.len
-        buffer.copy_from_slice(&str);
+        buffer.copy_from_slice(str);
 
         Ok(Self { vec: buffer })
     }
 
     pub fn from_unicode(unicode: &NtUnicode) -> anyhow::Result<Self> {
-        Self::from_u16(&unicode.str)
+        Self::from_u16(unicode.str)
     }
 
     #[inline]
@@ -109,8 +109,43 @@ impl UnicodeString {
     }
 
     #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.vec.capacity()
+    }
+}
+
+impl PartialEq<UnicodeString> for UnicodeString {
+    #[inline]
+    fn eq(&self, other: &UnicodeString) -> bool {
+        self.cmp(other).is_eq()
+    }
+}
+
+impl Eq for UnicodeString {}
+
+impl PartialOrd<UnicodeString> for UnicodeString {
+    #[inline]
+    fn partial_cmp(&self, other: &UnicodeString) -> Option<core::cmp::Ordering> {
+        self.vec.partial_cmp(&other.vec)
+    }
+}
+
+impl Ord for UnicodeString {
+    #[inline]
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.vec.cmp(&other.vec)
+    }
+}
+
+impl PartialEq<NtUnicode<'_>> for UnicodeString {
+    #[inline]
+    fn eq(&self, other: &NtUnicode<'_>) -> bool {
+        self.as_bytes() == other.str
     }
 }
 

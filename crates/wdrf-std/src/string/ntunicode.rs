@@ -1,13 +1,14 @@
 use wdk_sys::ntddk::RtlCompareUnicodeString;
 use wdk_sys::UNICODE_STRING;
 
+#[derive(Clone, Copy)]
 pub struct NtUnicode<'a> {
     data: UNICODE_STRING,
     pub str: &'a [u16],
 }
 
 impl<'a> NtUnicode<'a> {
-    pub fn new(unicode: &'a mut UNICODE_STRING) -> Self {
+    pub fn new(unicode: &'a UNICODE_STRING) -> Self {
         Self {
             data: *unicode,
             str: unsafe { core::slice::from_raw_parts_mut(unicode.Buffer, unicode.Length as _) },
@@ -15,10 +16,17 @@ impl<'a> NtUnicode<'a> {
     }
 
     pub fn new_from_slice(slice: &'a [u16]) -> Self {
+        let is_null_terminated = slice.last().map_or_else(|| false, |l| *l == 0);
+        let len = if is_null_terminated {
+            slice.len() - 1
+        } else {
+            slice.len()
+        };
+
         Self {
             data: UNICODE_STRING {
-                Length: slice.len() as _,
-                MaximumLength: slice.len() as _,
+                Length: (len * 2) as _,
+                MaximumLength: (slice.len() * 2) as _,
                 Buffer: slice.as_ptr() as _,
             },
             str: slice,
@@ -31,6 +39,14 @@ impl<'a> NtUnicode<'a> {
 
     pub fn ends_with(&self, sufix: &NtUnicode) -> bool {
         self.str.ends_with(sufix.str)
+    }
+
+    ///
+    /// # Safety
+    ///
+    /// Pointer pointed by UNICODE_STRING can become invalid
+    pub unsafe fn as_unicode(&mut self) -> UNICODE_STRING {
+        self.data
     }
 }
 
@@ -51,5 +67,19 @@ impl<'a> PartialOrd for NtUnicode<'a> {
 impl<'a> Ord for NtUnicode<'a> {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.str.cmp(&other.str)
+    }
+}
+
+pub trait AsUnicodeString {
+    unsafe fn as_unicode(&self) -> UNICODE_STRING;
+}
+
+impl AsUnicodeString for widestring::U16CStr {
+    unsafe fn as_unicode(&self) -> UNICODE_STRING {
+        UNICODE_STRING {
+            Length: (self.len() * 2) as _,
+            MaximumLength: ((self.len() + 1) * 2) as _,
+            Buffer: self.as_ptr() as _,
+        }
     }
 }
