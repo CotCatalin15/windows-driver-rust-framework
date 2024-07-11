@@ -18,6 +18,7 @@ use wdk_sys::{
 };
 use wdk_sys::{OBJ_CASE_INSENSITIVE, OBJ_KERNEL_HANDLE, UNICODE_STRING};
 use wdrf::context::{Context, ContextRegistry, FixedGlobalContextRegistry};
+use wdrf::logger::simple_file_logger::SimpleFileLogger;
 use wdrf::minifilter::communication::{FltCommunication, FltCommunicationBuilder};
 use wdrf::minifilter::{FltFilter, FltRegistrationBuilder};
 use wdrf::object::{ObjectAttribs, SecurityDescriptor};

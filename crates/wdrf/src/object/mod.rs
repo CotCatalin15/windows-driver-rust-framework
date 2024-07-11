@@ -23,6 +23,10 @@ impl SecurityDescriptor {
 
         Ok(SecurityDescriptor(sd))
     }
+
+    pub fn null_descriptor() -> Self {
+        Self(core::ptr::null_mut())
+    }
 }
 
 impl Drop for SecurityDescriptor {
