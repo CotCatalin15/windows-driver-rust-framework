@@ -20,11 +20,3 @@ wdk-build.workspace = true
 crate-type = ["cdylib"]
 
 [package.metadata.wdk]
-
-[profile.dev]
-panic = "abort"
-lto = true      # optional setting to enable Link Time Optimizations
-
-[profile.release]
-panic = "abort"
-lto = true      # optional setting to enable Link Time Optimizations

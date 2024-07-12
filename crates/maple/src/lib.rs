@@ -10,7 +10,7 @@ mod tests {
     use std::boxed::Box;
 
     use crate::{
-        consumer::{set_global_consumer, EventConsumer},
+        consumer::{set_global_consumer, EventConsumer, FilterResult},
         event,
         fields::{self, Level},
         info, warn,
@@ -23,11 +23,13 @@ mod tests {
             true
         }
 
-        fn filter(&self, meta: &fields::Metadata) -> bool {
+        fn disable(&self) {}
+
+        fn filter(&self, meta: &fields::Metadata) -> FilterResult {
             if meta.level == Level::Info {
-                false
+                FilterResult::Discard
             } else {
-                true
+                FilterResult::Allow
             }
         }
 
@@ -38,13 +40,20 @@ mod tests {
 
     #[test]
     pub fn test_logs() {
+        let r: anyhow::Result<u32> = Err(anyhow::Error::msg("Test"));
+
         let consumer = Box::new(MyConsumer {});
         let consumer = Box::leak(consumer);
 
-        set_global_consumer(consumer);
+        let _ = set_global_consumer(consumer);
 
         let a = 11;
-        info!("Test");
-        warn!(name = "My name", "Test");
+
+        warn!(
+            name = "test_logs",
+            result = r,
+            "This result contains a name"
+        );
+        warn!(result = r, "This result does not contain a name");
     }
 }
