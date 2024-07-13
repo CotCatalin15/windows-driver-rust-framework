@@ -48,7 +48,6 @@ impl<const SIZE: usize> ContextRegistry for FixedGlobalContextRegistry<SIZE> {
         let pos = inner.size.fetch_add(1, Ordering::SeqCst) as usize;
 
         if pos > SIZE {
-            panic!("Meh");
             Err(anyhow::Error::msg("Fixed context registry is full"))
         } else {
             unsafe {

@@ -11,9 +11,8 @@ mod tests {
 
     use crate::{
         consumer::{set_global_consumer, EventConsumer, FilterResult},
-        event,
         fields::{self, Level},
-        info, warn,
+        warn,
     };
 
     struct MyConsumer {}

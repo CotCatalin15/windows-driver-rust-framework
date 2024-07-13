@@ -12,7 +12,7 @@ use wdrf_std::{
         rwlock::ExRwLock,
     },
     traits::DispatchSafe,
-    NtResultEx, Result,
+    NtResult, NtResultEx,
 };
 
 pub trait ProcessDescriptor {
@@ -50,7 +50,7 @@ impl<H: ProcessHook + DispatchSafe + Send> ProcessRegistry<H> {
         }
     }
 
-    pub fn start_collector(&'static mut self) -> Result {
+    pub fn start_collector(&'static mut self) -> NtResult<()> {
         unsafe {
             if *self.started.get() {
                 return Ok(());
@@ -60,7 +60,7 @@ impl<H: ProcessHook + DispatchSafe + Send> ProcessRegistry<H> {
                 Some(create_process_notify_implementation),
                 false as _,
             );
-            Result::from_status(status)?;
+            NtResult::from_status(status, || ())?;
             *self.started.get() = true;
             GLOBAL_PROCESS_COLLECTOR = Some(self);
         }
@@ -68,7 +68,7 @@ impl<H: ProcessHook + DispatchSafe + Send> ProcessRegistry<H> {
         Ok(())
     }
 
-    pub fn stop_collector(&self) -> Result {
+    pub fn stop_collector(&self) -> NtResult<()> {
         unsafe {
             if *self.started.get() {
                 GLOBAL_PROCESS_COLLECTOR = None;
@@ -76,7 +76,7 @@ impl<H: ProcessHook + DispatchSafe + Send> ProcessRegistry<H> {
                     Some(create_process_notify_implementation),
                     true as _,
                 );
-                Result::from_status(status)?;
+                NtResult::from_status(status, || ())?;
             }
             *self.started.get() = false;
         }

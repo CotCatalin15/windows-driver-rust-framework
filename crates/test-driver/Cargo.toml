@@ -12,6 +12,7 @@ wdk.workspace = true
 wdk-alloc.workspace = true
 wdk-sys.workspace = true
 widestring.workspace = true
+maple.workspace = true
 
 [build-dependencies]
 wdk-build.workspace = true

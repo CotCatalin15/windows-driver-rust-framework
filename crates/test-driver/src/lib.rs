@@ -2,6 +2,9 @@
 
 use core::panic::PanicInfo;
 
+use maple::consumer::{get_global_registry, set_global_consumer};
+use maple::{info, trace};
+
 use wdk::{dbg_break, println};
 
 #[cfg(not(test))]
@@ -18,7 +21,7 @@ use wdk_sys::{
 };
 use wdk_sys::{OBJ_CASE_INSENSITIVE, OBJ_KERNEL_HANDLE, UNICODE_STRING};
 use wdrf::context::{Context, ContextRegistry, FixedGlobalContextRegistry};
-use wdrf::logger::simple_file_logger::SimpleFileLogger;
+use wdrf::logger::dbgprint::DbgPrintLogger;
 use wdrf::minifilter::communication::{FltCommunication, FltCommunicationBuilder};
 use wdrf::minifilter::{FltFilter, FltRegistrationBuilder};
 use wdrf::object::{ObjectAttribs, SecurityDescriptor};
@@ -44,6 +47,7 @@ struct TestDriverContext {
 }
 
 static DRIVER_CONTEXT: Context<TestDriverContext> = Context::uninit();
+static LOGGER_CONTEXT: Context<DbgPrintLogger> = Context::uninit();
 
 ///# Safety
 ///
@@ -85,6 +89,14 @@ fn driver_main(
     driver: &mut DRIVER_OBJECT,
     registry_path: &'static UNICODE_STRING,
 ) -> anyhow::Result<()> {
+    let print_logge =
+        DbgPrintLogger::new().map_err(|_| anyhow::Error::msg("Failed to create print logger"))?;
+
+    LOGGER_CONTEXT.init(&CONTEXT_REGISTRY, move || print_logge)?;
+    set_global_consumer(LOGGER_CONTEXT.get());
+
+    info!(name = "Driver entry", "Initializing driver");
+
     let registration = FltRegistrationBuilder::new()
         .unload(Some(minifilter_unload))
         .build()?;
@@ -109,8 +121,10 @@ fn driver_main(
 pub unsafe extern "C" fn minifilter_unload(_flags: FLT_FILTER_UNLOAD_FLAGS) -> NTSTATUS {
     dbg_break();
 
-    CONTEXT_REGISTRY.drop_self();
+    info!(name = "Unload", "Unloading callback called");
 
+    get_global_registry().disable_consumer();
+    CONTEXT_REGISTRY.drop_self();
     STATUS_SUCCESS
 }
 

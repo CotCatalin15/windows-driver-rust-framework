@@ -5,7 +5,7 @@ use crate::kmalloc::{GlobalKernelAllocator, TaggedObject};
 #[allow(type_alias_bounds)]
 pub type Vec<T: TaggedObject, A: Allocator = GlobalKernelAllocator> = alloc::vec::Vec<T, A>;
 
-pub trait VecExt<T>
+pub trait VecExt<T, A: Allocator>
 where
     T: TaggedObject,
 {
@@ -13,15 +13,32 @@ where
 
     fn try_insert(&mut self, idx: usize, value: T) -> anyhow::Result<()>;
 
+    fn try_resize(&mut self, size: usize, value: T) -> anyhow::Result<()>
+    where
+        T: Clone;
+
     fn create() -> Vec<T, GlobalKernelAllocator> {
         Vec::new_in(GlobalKernelAllocator::new_for_tagged::<T>())
     }
 }
 
-impl<T> VecExt<T> for Vec<T, GlobalKernelAllocator>
+impl<T, A: Allocator> VecExt<T, A> for Vec<T, A>
 where
     T: TaggedObject,
 {
+    fn try_resize(&mut self, new_len: usize, value: T) -> anyhow::Result<()>
+    where
+        T: Clone,
+    {
+        if new_len > self.len() {
+            self.try_reserve(new_len - self.len())
+                .map_err(|_| anyhow::Error::msg("Vec::try_reserver failed"))?;
+        }
+
+        self.resize(new_len, value);
+        Ok(())
+    }
+
     fn try_push(&mut self, value: T) -> anyhow::Result<()> {
         self.try_reserve(1)
             .map_err(|_| anyhow::Error::msg("Failed to reserve vec for try_push"))?;
