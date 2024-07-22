@@ -14,20 +14,30 @@ pub type Weak<T: TaggedObject, A: Allocator = GlobalKernelAllocator> = alloc::sy
 unsafe impl<T: DispatchSafe, A: Allocator> DispatchSafe for Arc<T, A> {}
 unsafe impl<T: DispatchSafe, A: Allocator> DispatchSafe for Weak<T, A> {}
 
-pub trait ArcExt<T, A>
-where
-    T: TaggedObject,
-    A: Allocator,
-{
-    fn try_create(data: T) -> anyhow::Result<Arc<T, A>>;
+pub trait ArcExt<T> {
+    fn try_create(data: T) -> anyhow::Result<Arc<T, GlobalKernelAllocator>>
+    where
+        T: TaggedObject;
+
+    fn try_create_in<A>(data: T, allocator: A) -> anyhow::Result<Arc<T, A>>
+    where
+        A: Allocator;
 }
 
-impl<T> ArcExt<T, GlobalKernelAllocator> for Arc<T, GlobalKernelAllocator>
+impl<T> ArcExt<T> for Arc<T>
 where
     T: TaggedObject,
 {
     fn try_create(data: T) -> anyhow::Result<Arc<T, GlobalKernelAllocator>> {
         Arc::try_new_in(data, GlobalKernelAllocator::new_for_tagged::<T>())
+            .map_err(|_| anyhow::Error::msg("Failed to allocate ArcInner<T>"))
+    }
+
+    fn try_create_in<A>(data: T, allocator: A) -> anyhow::Result<Arc<T, A>>
+    where
+        A: Allocator,
+    {
+        Arc::try_new_in(data, allocator)
             .map_err(|_| anyhow::Error::msg("Failed to allocate ArcInner<T>"))
     }
 }
