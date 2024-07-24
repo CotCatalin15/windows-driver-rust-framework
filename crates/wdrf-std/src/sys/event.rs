@@ -89,8 +89,10 @@ impl KeEvent {
 }
 
 unsafe impl WaitableObject for KeEvent {
-    unsafe fn kernel_object(&self) -> &WaitableKernelObject {
-        let ptr: *const KEVENT = &self.0;
-        &*(ptr as *const &WaitableKernelObject)
+    fn kernel_object(&self) -> &WaitableKernelObject {
+        unsafe {
+            let ptr: *const KEVENT = &self.0;
+            &*(ptr.cast())
+        }
     }
 }

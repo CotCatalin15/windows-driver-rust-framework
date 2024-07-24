@@ -1,13 +1,13 @@
 use core::num::NonZeroU32;
 
 use wdk_sys::{
-    ntddk::{KeInitializeSemaphore, KeReadStateEvent, KeReadStateSemaphore, KeReleaseSemaphore},
+    ntddk::{KeInitializeSemaphore, KeReadStateSemaphore, KeReleaseSemaphore},
     IO_NO_INCREMENT, KSEMAPHORE,
 };
 
 use crate::kmalloc::TaggedObject;
 
-use super::{WaitResponse, WaitableKernelObject, WaitableObject};
+use super::{WaitableKernelObject, WaitableObject};
 
 #[repr(C)]
 pub struct KeSemaphore(KSEMAPHORE);
@@ -58,8 +58,10 @@ impl KeSemaphore {
 }
 
 unsafe impl WaitableObject for KeSemaphore {
-    unsafe fn kernel_object(&self) -> &WaitableKernelObject {
-        let ptr: *const KSEMAPHORE = &self.0;
-        &*ptr.cast::<&WaitableKernelObject>()
+    fn kernel_object(&self) -> &WaitableKernelObject {
+        unsafe {
+            let ptr: *const KSEMAPHORE = &self.0;
+            &*ptr.cast()
+        }
     }
 }

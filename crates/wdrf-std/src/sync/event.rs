@@ -5,7 +5,7 @@ use crate::{
     kmalloc::TaggedObject,
     sys::{
         event::{EventType, KeEvent},
-        WaitableObject,
+        WaitableKernelObject, WaitableObject,
     },
     traits::DispatchSafe,
 };
@@ -74,7 +74,7 @@ impl Event {
 
 unsafe impl WaitableObject for Event {
     #[inline]
-    unsafe fn kernel_object(&self) -> *const () {
+    fn kernel_object(&self) -> &WaitableKernelObject {
         self.inner.kernel_object()
     }
 

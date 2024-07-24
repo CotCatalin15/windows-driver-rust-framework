@@ -44,13 +44,15 @@ impl WaitResponse {
 pub struct WaitableKernelObject;
 
 pub unsafe trait WaitableObject {
-    unsafe fn kernel_object(&self) -> &WaitableKernelObject;
+    fn kernel_object(&self) -> &WaitableKernelObject;
 
     #[cfg_attr(feature = "irql-check", irql_check(irql = APC_LELVEL))]
     fn wait(&self) -> WaitResponse {
         unsafe {
+            let ptr: *const WaitableKernelObject = self.kernel_object();
+
             let status = KeWaitForSingleObject(
-                (self.kernel_object() as *const WaitableKernelObject) as _,
+                ptr as _,
                 Executive,
                 KernelMode as _,
                 false as _,
@@ -67,8 +69,9 @@ pub unsafe trait WaitableObject {
             let mut timeout: LARGE_INTEGER = core::mem::zeroed();
             timeout.QuadPart = -((duration.as_nanos() / 100) as i64);
 
+            let ptr: *const WaitableKernelObject = self.kernel_object();
             let status = KeWaitForSingleObject(
-                (self.kernel_object() as *const WaitableKernelObject) as _,
+                ptr as _,
                 Executive,
                 KernelMode as _,
                 false as _,
@@ -84,8 +87,9 @@ pub unsafe trait WaitableObject {
         unsafe {
             let mut timeout: LARGE_INTEGER = core::mem::zeroed();
 
+            let ptr: *const WaitableKernelObject = self.kernel_object();
             let status = KeWaitForSingleObject(
-                (self.kernel_object() as *const WaitableKernelObject) as _,
+                ptr as _,
                 Executive,
                 KernelMode as _,
                 false as _,
@@ -123,8 +127,8 @@ impl<'a> MultiWaitArray<'a> {
 }
 
 unsafe impl<'a> WaitableObject for MultiWaitArray<'a> {
-    unsafe fn kernel_object(&self) -> &WaitableKernelObject {
-        *core::ptr::null_mut()
+    fn kernel_object(&self) -> &WaitableKernelObject {
+        panic!("Cannot get kernel_object from a waitable array")
     }
 
     fn wait(&self) -> WaitResponse {
@@ -149,16 +153,41 @@ unsafe impl<'a> WaitableObject for MultiWaitArray<'a> {
     fn wait_for(&self, duration: Duration) -> WaitResponse {
         unsafe {
             let mut timeout: LARGE_INTEGER = core::mem::zeroed();
-            timeout.QuadPart = core::mem::transmute((duration.as_nanos() / 100) as u64);
+            timeout.QuadPart = -((duration.as_nanos() / 100) as i64);
 
             let array = self.wait_array.as_ptr();
 
-            let status = KeWaitForSingleObject(
+            let status = KeWaitForMultipleObjects(
+                self.wait_array.len() as _,
                 array as _,
+                self.wait_all,
                 Executive,
                 KernelMode as _,
                 false as _,
                 &mut timeout,
+                core::ptr::null_mut(),
+            );
+
+            WaitResponse::from_ntstatus(status)
+        }
+    }
+
+    fn wait_status(&self) -> WaitResponse {
+        unsafe {
+            let mut timeout: LARGE_INTEGER = core::mem::zeroed();
+            timeout.QuadPart = 0;
+
+            let array = self.wait_array.as_ptr();
+
+            let status = KeWaitForMultipleObjects(
+                self.wait_array.len() as _,
+                array as _,
+                self.wait_all,
+                Executive,
+                KernelMode as _,
+                false as _,
+                &mut timeout,
+                core::ptr::null_mut(),
             );
 
             WaitResponse::from_ntstatus(status)

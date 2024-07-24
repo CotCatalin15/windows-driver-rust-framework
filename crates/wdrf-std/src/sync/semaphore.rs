@@ -1,7 +1,4 @@
-use core::{
-    num::{NonZero, NonZeroU32},
-    pin::Pin,
-};
+use core::{num::NonZeroU32, pin::Pin};
 
 use crate::{
     boxed::{Box, BoxExt},
@@ -45,9 +42,7 @@ impl<'a> SemaphorePermit<'a> {
 impl Drop for SemaphorePermit<'_> {
     fn drop(&mut self) {
         unsafe {
-            self.owned
-                .inner
-                .release(NonZero::new_unchecked(1));
+            self.owned.inner.release(NonZeroU32::new_unchecked(1));
         }
     }
 }
@@ -65,7 +60,7 @@ impl SemaphorePermitOwned {
 impl Drop for SemaphorePermitOwned {
     fn drop(&mut self) {
         unsafe {
-            self.owned.inner.release(NonZero::new_unchecked(1));
+            self.owned.inner.release(NonZeroU32::new_unchecked(1));
         }
     }
 }
@@ -132,11 +127,15 @@ impl Semaphore {
     pub fn release(&self, increment: NonZeroU32) {
         self.inner.release(increment);
     }
+
+    pub fn limit(&self) -> u32 {
+        self.limit
+    }
 }
 
 unsafe impl WaitableObject for Semaphore {
     #[inline]
-    unsafe fn kernel_object(&self) -> &crate::sys::WaitableKernelObject {
+    fn kernel_object(&self) -> &crate::sys::WaitableKernelObject {
         self.inner.kernel_object()
     }
 
