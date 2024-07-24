@@ -4,10 +4,18 @@ use wdk_sys::{
     _EVENT_TYPE::{NotificationEvent, SynchronizationEvent},
 };
 
-use super::WaitableObject;
+use crate::kmalloc::TaggedObject;
+
+use super::{WaitableKernelObject, WaitableObject};
 
 #[repr(C)]
 pub struct KeEvent(KEVENT);
+
+impl TaggedObject for KeEvent {
+    fn tag() -> crate::kmalloc::MemoryTag {
+        crate::kmalloc::MemoryTag::new_from_bytes(b"kmev")
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum EventType {
@@ -27,21 +35,20 @@ impl EventType {
 }
 
 impl KeEvent {
-    pub fn new() -> Self {
+    ///
+    ///# Safety
+    ///
+    /// Moving this object will invalidate internal pointers
+    /// resulting in  a BugCheck
+    ///
+    pub unsafe fn new() -> Self {
         unsafe { Self(core::mem::zeroed::<KEVENT>()) }
     }
 
-    pub fn init(&self, evtype: EventType) {
+    pub fn init(&self, evtype: EventType, signaled: bool) {
         unsafe {
             let event: *const KEVENT = &self.0;
-            KeInitializeEvent(event as _, evtype.as_wdm_value(), false as _);
-        }
-    }
-
-    pub fn init_signaled(&self, evtype: EventType) {
-        unsafe {
-            let event: *const KEVENT = &self.0;
-            KeInitializeEvent(event as _, evtype.as_wdm_value(), true as _);
+            KeInitializeEvent(event as _, evtype.as_wdm_value(), signaled as _);
         }
     }
 
@@ -82,8 +89,8 @@ impl KeEvent {
 }
 
 unsafe impl WaitableObject for KeEvent {
-    unsafe fn kernel_object(&self) -> *const () {
+    unsafe fn kernel_object(&self) -> &WaitableKernelObject {
         let ptr: *const KEVENT = &self.0;
-        ptr as _
+        &*(ptr as *const &WaitableKernelObject)
     }
 }

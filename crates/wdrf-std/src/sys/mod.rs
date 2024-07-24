@@ -2,6 +2,7 @@
 
 pub mod event;
 pub(crate) mod mutex;
+pub mod semaphore;
 
 use core::time::Duration;
 
@@ -39,14 +40,17 @@ impl WaitResponse {
     }
 }
 
+#[repr(C)]
+pub struct WaitableKernelObject;
+
 pub unsafe trait WaitableObject {
-    unsafe fn kernel_object(&self) -> *const ();
+    unsafe fn kernel_object(&self) -> &WaitableKernelObject;
 
     #[cfg_attr(feature = "irql-check", irql_check(irql = APC_LELVEL))]
     fn wait(&self) -> WaitResponse {
         unsafe {
             let status = KeWaitForSingleObject(
-                self.kernel_object() as _,
+                (self.kernel_object() as *const WaitableKernelObject) as _,
                 Executive,
                 KernelMode as _,
                 false as _,
@@ -64,7 +68,7 @@ pub unsafe trait WaitableObject {
             timeout.QuadPart = -((duration.as_nanos() / 100) as i64);
 
             let status = KeWaitForSingleObject(
-                self.kernel_object() as _,
+                (self.kernel_object() as *const WaitableKernelObject) as _,
                 Executive,
                 KernelMode as _,
                 false as _,
@@ -81,7 +85,7 @@ pub unsafe trait WaitableObject {
             let mut timeout: LARGE_INTEGER = core::mem::zeroed();
 
             let status = KeWaitForSingleObject(
-                self.kernel_object() as _,
+                (self.kernel_object() as *const WaitableKernelObject) as _,
                 Executive,
                 KernelMode as _,
                 false as _,
@@ -95,35 +99,32 @@ pub unsafe trait WaitableObject {
 
 pub struct DpcWaitError;
 
-pub struct MultiWaitArray<'a, const SIZE: usize> {
-    wait_array: [*mut core::ffi::c_void; SIZE],
+pub struct MultiWaitArray<'a> {
+    wait_array: &'a [&'a WaitableKernelObject],
     wait_all: i32,
-    _ref: &'a (),
 }
 
-impl<'a, const SIZE: usize> MultiWaitArray<'a, SIZE> {
+impl<'a> MultiWaitArray<'a> {
     #[inline(always)]
-    pub fn new(objects: &'a [&'a dyn WaitableObject; SIZE]) -> Self {
+    pub fn new(objects: &'a [&'a WaitableKernelObject]) -> Self {
         Self {
-            wait_array: objects.map(|e| unsafe { e.kernel_object() as _ }),
+            wait_array: objects,
             wait_all: WaitAny,
-            _ref: &(),
         }
     }
 
     #[inline(always)]
-    pub fn new_wait_all(objects: &'a [&'a dyn WaitableObject; SIZE]) -> Self {
+    pub fn new_wait_all(objects: &'a [&'a WaitableKernelObject]) -> Self {
         Self {
-            wait_array: objects.map(|e| unsafe { e.kernel_object() as _ }),
+            wait_array: objects,
             wait_all: WaitAll,
-            _ref: &(),
         }
     }
 }
 
-unsafe impl<'a, const SIZE: usize> WaitableObject for MultiWaitArray<'a, SIZE> {
-    unsafe fn kernel_object(&self) -> *const () {
-        core::ptr::null_mut()
+unsafe impl<'a> WaitableObject for MultiWaitArray<'a> {
+    unsafe fn kernel_object(&self) -> &WaitableKernelObject {
+        *core::ptr::null_mut()
     }
 
     fn wait(&self) -> WaitResponse {
@@ -131,7 +132,7 @@ unsafe impl<'a, const SIZE: usize> WaitableObject for MultiWaitArray<'a, SIZE> {
             let array = self.wait_array.as_ptr();
 
             let status = KeWaitForMultipleObjects(
-                SIZE as _,
+                self.wait_array.len() as _,
                 array as _,
                 self.wait_all,
                 Executive,
