@@ -9,6 +9,8 @@ use wdk_sys::{
     POOL_FLAG_NON_PAGED,
 };
 
+pub mod lookaside;
+
 #[derive(Clone, Copy)]
 pub struct MemoryTag {
     tag: u32,
@@ -24,6 +26,10 @@ impl MemoryTag {
             tag: u32::from_ne_bytes(*b),
         }
     }
+
+    pub fn tag(&self) -> u32 {
+        self.tag
+    }
 }
 
 pub trait TaggedObject {
@@ -35,6 +41,9 @@ pub trait TaggedObject {
         POOL_FLAG_NON_PAGED
     }
 }
+
+impl TaggedObject for i8 {}
+impl TaggedObject for u8 {}
 
 impl TaggedObject for i16 {}
 impl TaggedObject for u16 {}

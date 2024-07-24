@@ -492,6 +492,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 
 [[package]]
+name = "maple"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
 name = "matchers"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -664,6 +671,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3cb5ba0dc43242ce17de99c180e96db90b235b8a9fdc9543c96d2209116bd9f"
 
 [[package]]
+name = "sealed"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4a8caec23b7800fb97971a1c6ae365b6239aaeddfb934d6265f8505e795699d"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "semver"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -758,6 +777,7 @@ name = "test-driver"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "maple",
  "wdk",
  "wdk-alloc",
  "wdk-build",
@@ -972,6 +992,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "derive_builder",
+ "maple",
  "wdk",
  "wdk-sys",
  "wdrf-std",
@@ -1004,7 +1025,9 @@ dependencies = [
  "allocator-api2",
  "anyhow",
  "hashbrown",
+ "sealed",
  "thiserror-core",
+ "wdk",
  "wdk-sys",
  "wdrf-macros",
  "widestring",

@@ -4,24 +4,17 @@ version = "0.1.0"
 edition.workspace = true
 repository.workspace = true
 
-[profile.dev]
-panic = "abort"
-lto = true
-
-[profile.release]
-panic = "abort"
-lto = true
-
-
 [dependencies]
 wdk-sys.workspace = true
 wdrf-macros.workspace = true
+wdk.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 hashbrown.workspace = true
 allocator-api2.workspace = true
 widestring.workspace = true
 #ahash.workspace = true
+sealed.workspace = true
 
 [dev-dependencies]
 wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build", features = [

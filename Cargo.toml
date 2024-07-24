@@ -43,8 +43,10 @@ allocator-api2 = { version = "0.2.18", default-features = false }
 #ahash = { version = "0.8.11", default-features = false }
 
 widestring = { version = "1.1.0", default-features = false }
+sealed = { version = "0.5.0" }
 
 #Local crates
 wdrf = { path = "crates/wdrf", version = "0.1.0" }
 wdrf-macros = { path = "crates/wdrf-macros", version = "0.1.0" }
 wdrf-std = { path = "crates/wdrf-std", version = "0.1.0" }
+maple = { path = "crates/maple", version = "0.1.0" }

@@ -6,15 +6,6 @@ repository.workspace = true
 #readme = ""
 #license = ""
 
-[profile.dev]
-panic = "abort"
-lto = true
-
-[profile.release]
-panic = "abort"
-lto = true
-
-
 [dependencies]
 wdrf-std.workspace = true
 wdk-sys.workspace = true
@@ -22,6 +13,7 @@ anyhow.workspace = true
 wdk.workspace = true
 derive_builder.workspace = true
 widestring.workspace = true
+maple.workspace = true
 
 [dev-dependencies]
 wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", branch = "features/minifilter-build", features = [

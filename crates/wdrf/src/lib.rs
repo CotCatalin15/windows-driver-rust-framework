@@ -1,8 +1,10 @@
 #![no_std]
+#![feature(allocator_api)]
 #![feature(sync_unsafe_cell)]
 
 pub mod context;
 pub mod driver;
+pub mod logger;
 pub mod minifilter;
 pub mod object;
 pub mod process;
