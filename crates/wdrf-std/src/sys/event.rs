@@ -1,44 +1,21 @@
-use core::cell::UnsafeCell;
-
 use wdk_sys::{
-    ntddk::{KeInitializeEvent, KeSetEvent, KeWaitForSingleObject},
-    IO_NO_INCREMENT, KEVENT, NTSTATUS,
+    ntddk::{KeClearEvent, KeInitializeEvent, KePulseEvent, KeSetEvent},
+    IO_NO_INCREMENT, KEVENT,
     _EVENT_TYPE::{NotificationEvent, SynchronizationEvent},
-    _KWAIT_REASON::Executive,
-    _MODE::KernelMode,
-};
-
-use crate::{
-    kmalloc::TaggedObject,
-    sync::arc::{Arc, ArcExt},
-    traits::DispatchSafe,
 };
 
 use super::WaitableObject;
 
-pub struct UnsafeEvent(UnsafeCell<KEVENT>);
-
-unsafe impl Send for UnsafeEvent {}
-unsafe impl Sync for UnsafeEvent {}
-unsafe impl DispatchSafe for UnsafeEvent {}
-
-unsafe impl WaitableObject for UnsafeEvent {
-    unsafe fn get_object(&self) -> *const () {
-        return self.0.get().cast();
-    }
-}
-
-impl TaggedObject for UnsafeEvent {
-    fn tag() -> crate::kmalloc::MemoryTag {
-        crate::kmalloc::MemoryTag::new_from_bytes(b"uevt")
-    }
-}
+#[repr(C)]
+pub struct KeEvent(KEVENT);
 
 #[derive(Clone, Copy, Debug)]
 pub enum EventType {
     Notification,
     Synchronization,
 }
+
+unsafe impl Send for KeEvent {}
 
 impl EventType {
     fn as_wdm_value(self) -> i32 {
@@ -49,48 +26,64 @@ impl EventType {
     }
 }
 
-impl UnsafeEvent {
-    pub fn new(ev_type: EventType) -> Self {
-        unsafe {
-            let mut event = core::mem::zeroed::<KEVENT>();
-            KeInitializeEvent(&mut event, ev_type.as_wdm_value(), false as _);
+impl KeEvent {
+    pub fn new() -> Self {
+        unsafe { Self(core::mem::zeroed::<KEVENT>()) }
+    }
 
-            Self(UnsafeCell::new(event))
+    pub fn init(&self, evtype: EventType) {
+        unsafe {
+            let event: *const KEVENT = &self.0;
+            KeInitializeEvent(event as _, evtype.as_wdm_value(), false as _);
         }
     }
 
-    pub unsafe fn signal(&self) {
+    pub fn init_signaled(&self, evtype: EventType) {
         unsafe {
-            let _ = KeSetEvent(self.0.get(), IO_NO_INCREMENT as _, false as _);
+            let event: *const KEVENT = &self.0;
+            KeInitializeEvent(event as _, evtype.as_wdm_value(), true as _);
         }
     }
-}
 
-pub struct KEvent(UnsafeEvent);
-
-unsafe impl Send for KEvent {}
-unsafe impl Sync for KEvent {}
-unsafe impl DispatchSafe for KEvent {}
-
-impl TaggedObject for KEvent {
-    fn tag() -> crate::kmalloc::MemoryTag {
-        crate::kmalloc::MemoryTag::new_from_bytes(b"evnt")
-    }
-}
-
-unsafe impl WaitableObject for KEvent {
-    unsafe fn get_object(&self) -> *const () {
-        self.0.get_object()
-    }
-}
-
-impl KEvent {
-    pub fn new(ev_type: EventType) -> anyhow::Result<Arc<Self>> {
-        Arc::try_create(Self(UnsafeEvent::new(ev_type)))
-    }
-
-    #[inline(always)]
     pub fn signal(&self) {
-        unsafe { self.0.signal() };
+        unsafe {
+            let ptr: *const KEVENT = &self.0;
+            KeSetEvent(ptr as _, IO_NO_INCREMENT as _, false as _);
+        }
+    }
+
+    pub fn signal_wait(&self) {
+        unsafe {
+            let ptr: *const KEVENT = &self.0;
+            KeSetEvent(ptr as _, IO_NO_INCREMENT as _, true as _);
+        }
+    }
+
+    pub fn pulse(&self) {
+        unsafe {
+            let ptr: *const KEVENT = &self.0;
+            KePulseEvent(ptr as _, IO_NO_INCREMENT as _, false as _);
+        }
+    }
+
+    pub fn pulse_wait(&self) {
+        unsafe {
+            let ptr: *const KEVENT = &self.0;
+            KePulseEvent(ptr as _, IO_NO_INCREMENT as _, true as _);
+        }
+    }
+
+    pub fn clear(&self) {
+        unsafe {
+            let ptr: *const KEVENT = &self.0;
+            KeClearEvent(ptr as _);
+        }
+    }
+}
+
+unsafe impl WaitableObject for KeEvent {
+    unsafe fn kernel_object(&self) -> *const () {
+        let ptr: *const KEVENT = &self.0;
+        ptr as _
     }
 }

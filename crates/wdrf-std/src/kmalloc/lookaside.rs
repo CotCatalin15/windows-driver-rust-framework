@@ -1,9 +1,7 @@
 use core::{alloc::Allocator, num::NonZeroU32, ptr::NonNull};
 
 use wdk_sys::{
-    ntddk::{
-        self, ExAllocateFromLookasideListEx, ExFreeToLookasideListEx, ExInitializeLookasideListEx,
-    },
+    ntddk::{ExAllocateFromLookasideListEx, ExFreeToLookasideListEx, ExInitializeLookasideListEx},
     EX_LOOKASIDE_LIST_EX_FLAGS_FAIL_NO_RAISE, LOOKASIDE_LIST_EX, STATUS_NO_MEMORY,
     _POOL_TYPE::NonPagedPool,
 };
@@ -32,8 +30,8 @@ impl TaggedObject for LOOKASIDE_LIST_EX {
 
 impl LookasideAllocator {
     pub fn new(size: NonZeroU32, tag: MemoryTag) -> NtResult<Self> {
-        let mut list = Arc::try_create(unsafe { core::mem::zeroed::<LOOKASIDE_LIST_EX>() })
-            .map_err(|e| NtStatusError::Status(STATUS_NO_MEMORY))?;
+        let list = Arc::try_create(unsafe { core::mem::zeroed::<LOOKASIDE_LIST_EX>() })
+            .map_err(|_| NtStatusError::Status(STATUS_NO_MEMORY))?;
 
         let ptr: *const LOOKASIDE_LIST_EX = list.as_ref();
         let status = unsafe {

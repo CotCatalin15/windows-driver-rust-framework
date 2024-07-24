@@ -3,6 +3,7 @@
 #![feature(allocator_api)]
 #![feature(negative_impls)]
 #![feature(effects)]
+#![feature(arbitrary_self_types)]
 
 use sealed::sealed;
 use thiserror::Error;
@@ -21,7 +22,7 @@ pub mod sync;
 pub mod traits;
 pub mod vec;
 
-mod sys;
+pub mod sys;
 
 #[derive(Error, Debug)]
 pub enum NtStatusError {

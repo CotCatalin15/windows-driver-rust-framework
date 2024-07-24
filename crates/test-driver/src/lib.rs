@@ -1,6 +1,7 @@
 #![no_std]
 
 use core::panic::PanicInfo;
+use core::time::Duration;
 
 use maple::consumer::{get_global_registry, set_global_consumer};
 use maple::{info, trace};
@@ -28,6 +29,8 @@ use wdrf::object::{ObjectAttribs, SecurityDescriptor};
 use wdrf_std::slice::slice_from_raw_parts_mut_or_empty;
 use wdrf_std::string::ntunicode::AsUnicodeString;
 use wdrf_std::sync::arc::{Arc, ArcExt};
+use wdrf_std::sys::event::KeEvent;
+use wdrf_std::sys::WaitableObject;
 
 pub mod collector;
 
@@ -89,11 +92,23 @@ fn driver_main(
     driver: &mut DRIVER_OBJECT,
     registry_path: &'static UNICODE_STRING,
 ) -> anyhow::Result<()> {
-    let print_logge =
-        DbgPrintLogger::new().map_err(|_| anyhow::Error::msg("Failed to create print logger"))?;
+    //let print_logge =
+    //  DbgPrintLogger::new().map_err(|_| anyhow::Error::msg("Failed to create print logger"))?;
 
-    LOGGER_CONTEXT.init(&CONTEXT_REGISTRY, move || print_logge)?;
-    set_global_consumer(LOGGER_CONTEXT.get());
+    let event = KeEvent::new();
+    event.init(wdrf_std::sys::event::EventType::Synchronization);
+
+    let status = event.wait_for(Duration::from_secs(5));
+
+    println!("Wait status: {:#?}", status);
+
+    event.signal();
+
+    let status = event.wait();
+    println!("Wait status: {:#?}", status);
+
+    //LOGGER_CONTEXT.init(&CONTEXT_REGISTRY, move || print_logge)?;
+    //set_global_consumer(LOGGER_CONTEXT.get());
 
     info!(name = "Driver entry", "Initializing driver");
 
