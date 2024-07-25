@@ -43,6 +43,12 @@ impl WaitResponse {
 #[repr(C)]
 pub struct WaitableKernelObject;
 
+///
+/// # Safety
+///
+/// Its safe to implement as long as kernel_object returns a valid
+/// object that can be used with KeWait
+///
 pub unsafe trait WaitableObject {
     fn kernel_object(&self) -> &WaitableKernelObject;
 

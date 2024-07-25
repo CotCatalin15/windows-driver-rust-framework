@@ -1,10 +1,10 @@
 use core::{any::Any, num::NonZeroU32, ptr::NonNull};
 
 use wdk_sys::fltmgr::{
-    FltCloseCommunicationPort, FltCreateCommunicationPort, OBJECT_ATTRIBUTES, PFLT_CONNECT_NOTIFY,
+    FltCloseCommunicationPort, FltCreateCommunicationPort, PFLT_CONNECT_NOTIFY,
     PFLT_DISCONNECT_NOTIFY, PFLT_MESSAGE_NOTIFY, _FLT_PORT,
 };
-use wdrf_std::{boxed::Box, kmalloc::TaggedObject, sync::arc::Arc};
+use wdrf_std::{kmalloc::TaggedObject, sync::arc::Arc};
 
 use crate::object::ObjectAttribs;
 

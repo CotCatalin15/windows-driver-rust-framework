@@ -71,6 +71,11 @@ impl<'a> Ord for NtUnicode<'a> {
 }
 
 pub trait AsUnicodeString {
+    ///
+    /// # Safety
+    ///
+    /// TODO: Refactor this
+    ///
     unsafe fn as_unicode(&self) -> UNICODE_STRING;
 }
 

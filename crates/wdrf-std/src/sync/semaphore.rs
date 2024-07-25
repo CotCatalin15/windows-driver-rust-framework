@@ -90,7 +90,7 @@ impl Semaphore {
         Ok(box_sem)
     }
 
-    pub fn acquire<'a>(&'a self) -> anyhow::Result<SemaphorePermit<'a>, AcquireError> {
+    pub fn acquire(&self) -> anyhow::Result<SemaphorePermit<'_>, AcquireError> {
         if self.wait() != WaitResponse::Success {
             Err(AcquireError)
         } else {
@@ -98,7 +98,7 @@ impl Semaphore {
         }
     }
 
-    pub fn try_acquire<'a>(&'a self) -> anyhow::Result<SemaphorePermit<'a>, AcquireError> {
+    pub fn try_acquire(&self) -> anyhow::Result<SemaphorePermit<'_>, AcquireError> {
         if self.wait_status() != WaitResponse::Success {
             Err(AcquireError)
         } else {

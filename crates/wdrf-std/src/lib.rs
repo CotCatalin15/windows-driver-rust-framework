@@ -37,6 +37,7 @@ pub type NtResult<T> = anyhow::Result<T, NtStatusError>;
 #[sealed]
 pub trait NtResultEx<T> {
     fn from_status<F: FnOnce() -> T>(status: NTSTATUS, f: F) -> NtResult<T>;
+    fn from_status_err<E: FnOnce(), F: FnOnce() -> T>(status: NTSTATUS, e: E, f: F) -> NtResult<T>;
 }
 
 #[sealed]
@@ -45,6 +46,15 @@ impl<T> NtResultEx<T> for NtResult<T> {
         if NT_SUCCESS(status) {
             Ok(f())
         } else {
+            Err(NtStatusError::Status(status))
+        }
+    }
+
+    fn from_status_err<E: FnOnce(), F: FnOnce() -> T>(status: NTSTATUS, e: E, f: F) -> NtResult<T> {
+        if NT_SUCCESS(status) {
+            Ok(f())
+        } else {
+            e();
             Err(NtStatusError::Status(status))
         }
     }

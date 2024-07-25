@@ -21,6 +21,11 @@ impl Handle {
         }
     }
 
+    ///
+    /// # Safety
+    ///
+    /// Should not be used, it here just in case you do not know the type
+    ///
     pub unsafe fn new_unknown(raw_handle: HANDLE) -> Self {
         Self {
             object_type: None,
@@ -28,6 +33,12 @@ impl Handle {
         }
     }
 
+    ///
+    /// # Safety
+    ///
+    /// Its safe to use as long as self lives longer than this
+    /// If self drops the HANDLE becomes invalid which can cause problems
+    ///
     pub unsafe fn raw_handle(&self) -> HANDLE {
         self.handle
     }
