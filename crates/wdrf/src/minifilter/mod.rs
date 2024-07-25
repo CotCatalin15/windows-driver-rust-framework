@@ -2,10 +2,9 @@ use core::{mem::MaybeUninit, ptr::NonNull};
 
 use wdk_sys::{
     fltmgr::{
-        FltRegisterFilter, FltStartFiltering, FltUnloadFilter, FltUnregisterFilter,
-        FLT_CONTEXT_END, FLT_REGISTRATION_VERSION, IRP_MJ_OPERATION_END,
-        PFLT_FILTER_UNLOAD_CALLBACK, _FLT_CONTEXT_REGISTRATION, _FLT_FILTER,
-        _FLT_OPERATION_REGISTRATION, _FLT_REGISTRATION,
+        FltRegisterFilter, FltStartFiltering, FltUnregisterFilter, FLT_CONTEXT_END,
+        FLT_REGISTRATION_VERSION, IRP_MJ_OPERATION_END, PFLT_FILTER_UNLOAD_CALLBACK,
+        _FLT_CONTEXT_REGISTRATION, _FLT_FILTER, _FLT_OPERATION_REGISTRATION, _FLT_REGISTRATION,
     },
     DRIVER_OBJECT,
 };

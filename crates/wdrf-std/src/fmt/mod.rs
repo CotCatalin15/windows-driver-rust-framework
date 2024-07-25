@@ -7,10 +7,7 @@ pub struct Wrapper<'a> {
 
 impl<'a> Wrapper<'a> {
     pub fn new(buf: &'a mut [u8]) -> Self {
-        Wrapper {
-            buf: buf,
-            offset: 0,
-        }
+        Wrapper { buf, offset: 0 }
     }
 }
 

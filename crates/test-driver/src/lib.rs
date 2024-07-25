@@ -62,55 +62,24 @@ struct TestDriverContext {
 static DRIVER_CONTEXT: Context<TestDriverContext> = Context::uninit();
 static LOGGER_CONTEXT: Context<DbgPrintLogger> = Context::uninit();
 
-unsafe extern "C" fn thread_entry(_context: *mut core::ffi::c_void) {
-    let mut time: LARGE_INTEGER = core::mem::zeroed();
-    time.QuadPart = -(200000000);
-
-    KeDelayExecutionThread(KernelMode as _, false as _, &mut time);
-}
-
 pub fn test() -> bool {
-    unsafe {
-        let ev1 = Event::try_create_box(EventType::Notification, false).unwrap();
-        let ev2 = Event::try_create_box(EventType::Notification, false).unwrap();
+    dbg_break();
 
-        ev1.wait_for(Duration::from_secs(4));
+    let th = wdrf_std::thread::spawn(|| unsafe {
+        let mut time: LARGE_INTEGER = core::mem::zeroed();
+        time.QuadPart = -(200000000);
 
-        let wait_array = [ev1.kernel_object(), ev2.kernel_object()];
-        let obj = MultiWaitArray::new(&wait_array);
-        obj.wait_for(Duration::from_secs(1));
+        KeDelayExecutionThread(KernelMode as _, false as _, &mut time);
 
-        let mut handle: wdk_sys::HANDLE = core::ptr::null_mut();
-        let status = PsCreateSystemThread(
-            &mut handle,
-            DELETE | SYNCHRONIZE,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-            Some(thread_entry),
-            core::ptr::null_mut(),
-        );
-
-        if !wdk::nt_success(status) {
-            return true;
-        }
-
-        let handle = Handle::new(KernelObjectType::Thread, handle);
-
-        let th_obj = ArcKernelObj::<PKTHREAD>::from_handle(&handle, THREAD_ALL_ACCESS);
-
-        if th_obj.is_err() {
-            return true;
-        }
-
-        let th_obj = th_obj.unwrap();
-
-        th_obj.wait();
-
-        if !wdk::nt_success(status) {
-            return true;
-        }
+        10
+    });
+    if th.is_err() {
+        return true;
     }
+
+    let th = th.unwrap();
+
+    let result = th.join();
 
     true
 }
@@ -125,8 +94,6 @@ pub unsafe extern "system" fn driver_entry(
     driver: &mut DRIVER_OBJECT,
     registry_path: PCUNICODE_STRING,
 ) -> NTSTATUS {
-    dbg_break();
-
     if test() {
         return STATUS_UNSUCCESSFUL;
     }

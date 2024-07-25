@@ -1,7 +1,4 @@
-use core::{
-    fmt::{Debug, Write as FmtWrite},
-    num::NonZeroU32,
-};
+use core::{fmt::Write as FmtWrite, num::NonZeroU32};
 use maple::consumer::EventConsumer;
 use wdk::{dbg_break, println};
 use wdk_sys::ntddk::DbgPrint;

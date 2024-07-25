@@ -56,6 +56,16 @@ impl TaggedObject for u64 {}
 
 impl TaggedObject for () {}
 
+impl<T> TaggedObject for dyn FnOnce() -> T {
+    fn tag() -> MemoryTag {
+        MemoryTag::new_from_bytes(b"func")
+    }
+
+    fn flags() -> u64 {
+        POOL_FLAG_NON_PAGED
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum AllocError {
     #[error("Out of memory")]

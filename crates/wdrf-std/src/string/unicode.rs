@@ -131,7 +131,7 @@ impl Eq for UnicodeString {}
 impl PartialOrd<UnicodeString> for UnicodeString {
     #[inline]
     fn partial_cmp(&self, other: &UnicodeString) -> Option<core::cmp::Ordering> {
-        self.vec.partial_cmp(&other.vec)
+        Some(self.vec.cmp(&other.vec))
     }
 }
 
