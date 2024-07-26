@@ -24,11 +24,11 @@ pub trait ArcExt<T> {
         A: Allocator;
 }
 
-impl<T> ArcExt<T> for Arc<T>
-where
-    T: TaggedObject,
-{
-    fn try_create(data: T) -> anyhow::Result<Arc<T, GlobalKernelAllocator>> {
+impl<T> ArcExt<T> for Arc<T> {
+    fn try_create(data: T) -> anyhow::Result<Arc<T, GlobalKernelAllocator>>
+    where
+        T: TaggedObject,
+    {
         Arc::try_new_in(data, GlobalKernelAllocator::new_for_tagged::<T>())
             .map_err(|_| anyhow::Error::msg("Failed to allocate ArcInner<T>"))
     }

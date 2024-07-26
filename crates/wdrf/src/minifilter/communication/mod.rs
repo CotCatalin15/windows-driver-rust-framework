@@ -32,7 +32,7 @@ impl TaggedObject for FltPort {
 pub struct FltPortCommunicationBuilder<'a> {
     filter: Arc<FltFilter>,
     name: NtUnicodeStr<'a>,
-    cookie: Option<NonNull<dyn Any>>,
+    cookie: Option<NonNull<()>>,
     connect: PFLT_CONNECT_NOTIFY,
     disconnect: PFLT_DISCONNECT_NOTIFY,
     message: PFLT_MESSAGE_NOTIFY,
@@ -52,7 +52,7 @@ impl<'a> FltPortCommunicationBuilder<'a> {
         }
     }
 
-    pub fn cookie(mut self, cookie: NonNull<dyn Any>) -> Self {
+    pub fn cookie(mut self, cookie: NonNull<()>) -> Self {
         self.cookie = Some(cookie);
         self
     }
@@ -87,12 +87,17 @@ impl<'a> FltPortCommunicationBuilder<'a> {
         );
 
         let ptr: *mut OBJECT_ATTRIBUTES = obj_attribs.as_ref_mut();
+
+        let cookie = match self.cookie {
+            Some(cookie) => cookie.as_ptr().cast(),
+            None => core::ptr::null_mut(),
+        };
         let status = unsafe {
             FltCreateCommunicationPort(
                 self.filter.0.as_ptr(),
                 &mut port,
                 ptr.cast(),
-                core::ptr::null_mut(),
+                cookie,
                 self.connect,
                 self.disconnect,
                 self.message,

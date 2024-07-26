@@ -39,7 +39,7 @@ impl EventConsumer for DbgPrintLogger {
 
     fn filter(&self, _meta: &maple::fields::Metadata) -> maple::consumer::FilterResult {
         unsafe {
-            if KeGetCurrentIrql() > APC_LEVEL {
+            if KeGetCurrentIrql() > APC_LEVEL as _ {
                 FilterResult::Discard
             } else {
                 FilterResult::Allow
@@ -64,7 +64,7 @@ impl EventConsumer for DbgPrintLogger {
         let mut wrapper = Wrapper::new(buffer.as_mut_slice());
         let meta = event.meta();
         let r = wrapper.write_fmt(format_args!(
-            "[{}:{}:{}][{}] {:#?}\n\0",
+            "[{}:{}:{}][{}] {}\n\0",
             meta.module,
             meta.file,
             meta.line,

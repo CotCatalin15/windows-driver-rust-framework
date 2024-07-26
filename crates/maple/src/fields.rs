@@ -41,10 +41,7 @@ impl<'a> Event<'a> {
 
 impl<'a> Event<'a> {
     pub fn dispatch(meta: &'a Metadata, args: Arguments<'a>) {
-        let event = Event {
-            meta: meta,
-            args: args,
-        };
+        let event = Event { meta, args };
 
         get_global_registry().consumer().event(&event);
     }

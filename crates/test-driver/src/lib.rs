@@ -2,6 +2,7 @@
 
 use core::panic::PanicInfo;
 
+use flt_communication::{create_communication, FltCallbackImpl};
 use maple::consumer::{get_global_registry, set_global_consumer};
 use maple::{info, trace};
 
@@ -25,13 +26,14 @@ use wdk_sys::{
 use wdk_sys::{LARGE_INTEGER, UNICODE_STRING};
 use wdrf::context::{Context, ContextRegistry, FixedGlobalContextRegistry};
 use wdrf::logger::dbgprint::DbgPrintLogger;
-use wdrf::minifilter::communication::{FltCommunication, FltCommunicationBuilder};
+use wdrf::minifilter::communication::client_communication::FltClientCommunication;
 use wdrf::minifilter::{FltFilter, FltRegistrationBuilder};
 use wdrf_std::slice::slice_from_raw_parts_mut_or_empty;
 use wdrf_std::sync::arc::{Arc, ArcExt};
 use widestring::Utf16Str;
 
-pub mod collector;
+mod collector;
+mod flt_communication;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -45,7 +47,7 @@ static CONTEXT_REGISTRY: FixedGlobalContextRegistry<10> = FixedGlobalContextRegi
 
 struct TestDriverContext {
     filter: Arc<FltFilter>,
-    communication: Arc<FltCommunication>,
+    communication: FltClientCommunication<FltCallbackImpl>,
 }
 
 static DRIVER_CONTEXT: Context<TestDriverContext> = Context::uninit();
@@ -67,16 +69,6 @@ pub unsafe extern "system" fn driver_entry(
     }
 }
 
-fn create_communication(filter: &Arc<FltFilter>) -> anyhow::Result<FltCommunication> {
-    let port_name = nt_string::nt_unicode_str!("\\TESTPORT");
-
-    FltCommunicationBuilder::new(filter.clone(), port_name)
-        .connect(Some(flt_comm_connection))
-        .disconnect(Some(flt_comm_disconnect))
-        .message(Some(flt_comm_notify))
-        .build()
-}
-
 fn driver_main(
     driver: &mut DRIVER_OBJECT,
     registry_path: &'static UNICODE_STRING,
@@ -95,10 +87,9 @@ fn driver_main(
     let filter = registration.register_filter(driver)?;
     let filter = Arc::try_create(filter)?;
 
-    let comm = create_communication(&filter)?;
-    let comm = Arc::try_create(comm)?;
+    let comm = create_communication(filter.clone())?;
 
-    DRIVER_CONTEXT.init(&CONTEXT_REGISTRY, || TestDriverContext {
+    DRIVER_CONTEXT.init(&CONTEXT_REGISTRY, move || TestDriverContext {
         filter,
         communication: comm,
     })?;
@@ -119,39 +110,5 @@ pub unsafe extern "C" fn minifilter_unload(_flags: FLT_FILTER_UNLOAD_FLAGS) -> N
 
     get_global_registry().disable_consumer();
     CONTEXT_REGISTRY.drop_self();
-    STATUS_SUCCESS
-}
-
-unsafe extern "C" fn flt_comm_connection(
-    client_port: PFLT_PORT,
-    server_cookie: *mut core::ffi::c_void,
-    connection_context: *mut core::ffi::c_void,
-    size_of_context: u32,
-    connection_port_cookie: *mut *mut core::ffi::c_void,
-) -> NTSTATUS {
-    dbg_break();
-
-    STATUS_SUCCESS
-}
-
-unsafe extern "C" fn flt_comm_disconnect(client_cookie: *mut core::ffi::c_void) {
-    dbg_break();
-}
-
-unsafe extern "C" fn flt_comm_notify(
-    client_cookie: *mut core::ffi::c_void,
-    input_buffer: *mut core::ffi::c_void,
-    input_buffer_length: u32,
-    output_buffer: *mut core::ffi::c_void,
-    output_buffer_length: u32,
-    return_output_buffer_length: *mut u32,
-) -> NTSTATUS {
-    dbg_break();
-
-    let slice =
-        slice_from_raw_parts_mut_or_empty(input_buffer as *mut u8, input_buffer_length as _);
-
-    println!("Received: {:#?}", slice);
-
     STATUS_SUCCESS
 }
