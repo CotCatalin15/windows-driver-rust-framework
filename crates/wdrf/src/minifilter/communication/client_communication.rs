@@ -1,9 +1,11 @@
-use core::{cell::Cell, num::NonZeroU32, ptr::NonNull};
+use core::{cell::Cell, num::NonZeroU32, ptr::NonNull, time::Duration};
 
 use nt_string::unicode_string::NtUnicodeStr;
 use wdk::dbg_break;
 use wdk_sys::{
-    fltmgr::{FltCloseClientPort, PFLT_PORT, _FLT_FILTER, _FLT_PORT},
+    fltmgr::{
+        FltCloseClientPort, FltSendMessage, PFLT_PORT, _FLT_FILTER, _FLT_PORT, _LARGE_INTEGER,
+    },
     NTSTATUS, STATUS_INSUFFICIENT_RESOURCES, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
 };
 use wdrf_std::{
@@ -14,6 +16,7 @@ use wdrf_std::{
         tracked_slice::TrackedSlice,
     },
     sync::arc::{Arc, ArcExt},
+    NtResult, NtResultEx,
 };
 
 use crate::minifilter::FltFilter;
@@ -36,6 +39,54 @@ impl<Cookie: 'static + Send> FltClient<Cookie> {
 
     pub fn get_cookie(&self) -> Option<&Cookie> {
         unsafe { (*self.cookie.as_ptr()).as_ref() }
+    }
+
+    pub fn send_with_reply(&self, input: &[u8], output: Option<&mut [u8]>) -> NtResult<u32> {
+        unsafe {
+            let mut client = self.client.as_ptr();
+
+            let mut reply_size = output.as_ref().map_or_else(|| 0, |buff| buff.len()) as _;
+
+            let status = FltSendMessage(
+                self.filter.as_ptr(),
+                &mut client,
+                input.as_ptr() as _,
+                input.len() as _,
+                output.map_or_else(|| core::ptr::null_mut(), |buff| buff.as_ptr() as _),
+                &mut reply_size,
+                core::ptr::null_mut(),
+            );
+
+            NtResult::from_status(status, || reply_size)
+        }
+    }
+
+    pub fn send_with_reply_timeout(
+        &self,
+        input: &[u8],
+        output: Option<&mut [u8]>,
+        duration: Duration,
+    ) -> NtResult<u32> {
+        unsafe {
+            let mut client = self.client.as_ptr();
+
+            let mut timeout: _LARGE_INTEGER = core::mem::zeroed();
+            timeout.QuadPart = -((duration.as_nanos() / 100) as i64);
+
+            let mut reply_size = output.as_ref().map_or_else(|| 0, |buff| buff.len()) as _;
+
+            let status = FltSendMessage(
+                self.filter.as_ptr(),
+                &mut client,
+                input.as_ptr() as _,
+                input.len() as _,
+                output.map_or_else(|| core::ptr::null_mut(), |buff| buff.as_ptr() as _),
+                &mut reply_size,
+                &mut timeout,
+            );
+
+            NtResult::from_status(status, || reply_size)
+        }
     }
 }
 

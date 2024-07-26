@@ -19,7 +19,7 @@ impl FltCommunicationCallback for FltCallbackImpl {
         client: &Arc<FltClient<Self::ClientCookie>>,
         connection_buf: &[u8],
     ) -> anyhow::Result<Option<Self::ClientCookie>> {
-        Ok(())
+        Ok(None)
     }
 
     fn on_disconnect(&self, client: &FltClient<Self::ClientCookie>) {}
