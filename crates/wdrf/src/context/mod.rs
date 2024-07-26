@@ -129,6 +129,11 @@ impl<T> Context<T> {
         unsafe { (*self.data.get()).assume_init_ref() }
     }
 
+    ///
+    /// # Safety
+    ///
+    /// It gets the mutable version of the context
+    ///
     pub unsafe fn get_mut(&self) -> &'static mut T {
         unsafe { (*self.data.get()).assume_init_mut() }
     }

@@ -3,14 +3,14 @@ pub mod this_thread;
 use core::cell::UnsafeCell;
 
 use wdk_sys::{
-    ntddk::PsCreateSystemThread, DELETE, OBJECT_ATTRIBUTES, OBJ_KERNEL_HANDLE, PKTHREAD,
-    POOL_FLAG_PAGED, STATUS_NO_MEMORY, SYNCHRONIZE, THREAD_ALL_ACCESS,
+    ntddk::PsCreateSystemThread, DELETE, OBJ_KERNEL_HANDLE, PKTHREAD, POOL_FLAG_PAGED,
+    STATUS_NO_MEMORY, SYNCHRONIZE, THREAD_ALL_ACCESS,
 };
 
 use crate::{
     boxed::{Box, BoxExt},
     kmalloc::{GlobalKernelAllocator, MemoryTag, TaggedObject},
-    object::ArcKernelObj,
+    object::{attribute::ObjectAttributes, ArcKernelObj},
     sync::arc::{Arc, ArcExt},
     sys::{WaitableKernelObject, WaitableObject},
     NtResult, NtStatusError,
@@ -112,14 +112,12 @@ where
 
         let leaked = Arc::into_raw(packet.clone());
 
-        let mut obj_attrib: OBJECT_ATTRIBUTES = core::mem::zeroed();
-        obj_attrib.Length = core::mem::size_of::<OBJECT_ATTRIBUTES>() as _;
-        obj_attrib.Attributes = OBJ_KERNEL_HANDLE;
+        let obj = ObjectAttributes::new(OBJ_KERNEL_HANDLE);
 
         let status = PsCreateSystemThread(
             &mut handle,
             SYNCHRONIZE | DELETE,
-            &mut obj_attrib,
+            obj.as_ref_mut(),
             core::ptr::null_mut(),
             core::ptr::null_mut(),
             Some(thread_main::<T>),

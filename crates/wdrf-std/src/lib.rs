@@ -18,7 +18,6 @@ pub mod io;
 pub mod kmalloc;
 pub mod object;
 pub mod slice;
-pub mod string;
 pub mod sync;
 pub mod thread;
 pub mod traits;

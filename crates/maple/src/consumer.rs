@@ -80,7 +80,7 @@ impl ConsumerRegistry {
 
     #[inline]
     pub fn should_log_event(&self, meta: &Metadata) -> bool {
-        match self.consumer.filter(&meta) {
+        match self.consumer.filter(meta) {
             FilterResult::Allow => true,
             FilterResult::Discard => false,
         }
