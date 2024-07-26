@@ -1,3 +1,5 @@
+pub mod client_communication;
+
 use core::{any::Any, num::NonZeroU32, ptr::NonNull};
 
 use nt_string::unicode_string::NtUnicodeStr;
@@ -12,21 +14,22 @@ use wdrf_std::{kmalloc::TaggedObject, object::attribute::ObjectAttributes, sync:
 
 use super::{security_descriptor::FltSecurityDescriptor, FltFilter};
 
-pub struct FltCommunication {
+pub struct FltPort {
     filter: Arc<FltFilter>,
     port: NonNull<_FLT_PORT>,
+    max_clients: u32,
 }
 
-unsafe impl Send for FltCommunication {}
-unsafe impl Sync for FltCommunication {}
+unsafe impl Send for FltPort {}
+unsafe impl Sync for FltPort {}
 
-impl TaggedObject for FltCommunication {
+impl TaggedObject for FltPort {
     fn tag() -> wdrf_std::kmalloc::MemoryTag {
         wdrf_std::kmalloc::MemoryTag::new_from_bytes(b"fltc")
     }
 }
 
-pub struct FltCommunicationBuilder<'a> {
+pub struct FltPortCommunicationBuilder<'a> {
     filter: Arc<FltFilter>,
     name: NtUnicodeStr<'a>,
     cookie: Option<NonNull<dyn Any>>,
@@ -36,7 +39,7 @@ pub struct FltCommunicationBuilder<'a> {
     max_connections: NonZeroU32,
 }
 
-impl<'a> FltCommunicationBuilder<'a> {
+impl<'a> FltPortCommunicationBuilder<'a> {
     pub fn new(filter: Arc<FltFilter>, name: NtUnicodeStr<'a>) -> Self {
         Self {
             filter,
@@ -74,7 +77,7 @@ impl<'a> FltCommunicationBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> anyhow::Result<FltCommunication> {
+    pub fn build(self) -> anyhow::Result<FltPort> {
         let mut port = core::ptr::null_mut();
         let security_descriptor = FltSecurityDescriptor::try_default_flt()?;
         let obj_attribs = ObjectAttributes::new_named_security(
@@ -100,18 +103,22 @@ impl<'a> FltCommunicationBuilder<'a> {
             Err(anyhow::Error::msg("Failed to create communication port"))
         } else {
             let port = NonNull::new(port).unwrap();
-            Ok(FltCommunication::new(self.filter, port))
+            Ok(FltPort::new(self.filter, port, self.max_connections.get()))
         }
     }
 }
 
-impl FltCommunication {
-    fn new(filter: Arc<FltFilter>, port: NonNull<_FLT_PORT>) -> Self {
-        Self { filter, port }
+impl FltPort {
+    fn new(filter: Arc<FltFilter>, port: NonNull<_FLT_PORT>, max_clients: u32) -> Self {
+        Self {
+            filter,
+            port,
+            max_clients,
+        }
     }
 }
 
-impl Drop for FltCommunication {
+impl Drop for FltPort {
     fn drop(&mut self) {
         unsafe {
             FltCloseCommunicationPort(self.port.as_ptr());
