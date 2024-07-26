@@ -5,8 +5,10 @@
 pub mod context;
 pub mod driver;
 pub mod logger;
-pub mod minifilter;
 pub mod process;
+
+#[cfg(feature = "minifilter")]
+pub mod minifilter;
 
 use driver::{DriverDispatch, DriverObject};
 use wdk_sys::{DRIVER_OBJECT, NTSTATUS, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING};

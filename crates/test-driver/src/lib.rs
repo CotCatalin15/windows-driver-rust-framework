@@ -51,28 +51,6 @@ struct TestDriverContext {
 static DRIVER_CONTEXT: Context<TestDriverContext> = Context::uninit();
 static LOGGER_CONTEXT: Context<DbgPrintLogger> = Context::uninit();
 
-pub fn test() -> bool {
-    dbg_break();
-
-    let th = wdrf_std::thread::spawn(|| unsafe {
-        let mut time: LARGE_INTEGER = core::mem::zeroed();
-        time.QuadPart = -(200000000);
-
-        KeDelayExecutionThread(KernelMode as _, false as _, &mut time);
-
-        10
-    });
-    if th.is_err() {
-        return true;
-    }
-
-    let th = th.unwrap();
-
-    let result = th.join();
-
-    true
-}
-
 ///# Safety
 ///
 /// Driver entry point
@@ -120,14 +98,16 @@ fn driver_main(
     let comm = create_communication(&filter)?;
     let comm = Arc::try_create(comm)?;
 
-    unsafe {
-        filter.start_filtering()?;
-    }
-
     DRIVER_CONTEXT.init(&CONTEXT_REGISTRY, || TestDriverContext {
         filter,
         communication: comm,
     })?;
+
+    let context = DRIVER_CONTEXT.get();
+
+    unsafe {
+        context.filter.start_filtering();
+    }
 
     Ok(())
 }

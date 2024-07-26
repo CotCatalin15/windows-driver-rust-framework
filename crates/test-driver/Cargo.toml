@@ -6,7 +6,7 @@ repository.workspace = true
 
 [dependencies]
 wdrf-std.workspace = true
-wdrf.workspace = true
+wdrf = { path = "../wdrf", version = "0.1.0", features = ["minifilter"] }
 anyhow.workspace = true
 wdk.workspace = true
 wdk-alloc.workspace = true

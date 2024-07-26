@@ -1,7 +1,10 @@
 use core::{fmt::Write as FmtWrite, num::NonZeroU32};
-use maple::consumer::EventConsumer;
+use maple::consumer::{EventConsumer, FilterResult};
 use wdk::{dbg_break, println};
-use wdk_sys::ntddk::DbgPrint;
+use wdk_sys::{
+    ntddk::{DbgPrint, KeGetCurrentIrql},
+    APC_LEVEL,
+};
 use wdrf_std::{
     fmt::Wrapper,
     kmalloc::{lookaside::LookasideAllocator, MemoryTag},
@@ -35,7 +38,13 @@ impl EventConsumer for DbgPrintLogger {
     fn disable(&self) {}
 
     fn filter(&self, _meta: &maple::fields::Metadata) -> maple::consumer::FilterResult {
-        maple::consumer::FilterResult::Allow
+        unsafe {
+            if KeGetCurrentIrql() > APC_LEVEL {
+                FilterResult::Discard
+            } else {
+                FilterResult::Allow
+            }
+        }
     }
 
     fn event(&self, event: &maple::fields::Event) {

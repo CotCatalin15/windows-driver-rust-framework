@@ -26,14 +26,6 @@ impl TaggedObject for FltCommunication {
     }
 }
 
-impl Drop for FltCommunication {
-    fn drop(&mut self) {
-        unsafe {
-            FltCloseCommunicationPort(self.port.as_ptr());
-        }
-    }
-}
-
 pub struct FltCommunicationBuilder<'a> {
     filter: Arc<FltFilter>,
     name: NtUnicodeStr<'a>,
@@ -116,5 +108,13 @@ impl<'a> FltCommunicationBuilder<'a> {
 impl FltCommunication {
     fn new(filter: Arc<FltFilter>, port: NonNull<_FLT_PORT>) -> Self {
         Self { filter, port }
+    }
+}
+
+impl Drop for FltCommunication {
+    fn drop(&mut self) {
+        unsafe {
+            FltCloseCommunicationPort(self.port.as_ptr());
+        }
     }
 }
