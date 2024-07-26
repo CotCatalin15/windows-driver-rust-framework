@@ -1,3 +1,4 @@
+pub mod attribute;
 pub mod handle;
 
 use handle::Handle;
@@ -76,6 +77,11 @@ where
         }
     }
 
+    ///
+    /// # Safety
+    ///
+    /// Must be a valid handle and access rights
+    ///
     pub unsafe fn from_raw_handle(raw_handle: HANDLE, access: u32) -> NtResult<Self> {
         unsafe {
             let mut obj_ptr = core::ptr::null_mut();
@@ -91,16 +97,19 @@ where
 
             let non_null = NonNull::new(obj_ptr);
 
-            if let None = non_null {
-                Err(NtStatusError::Status(STATUS_OBJECT_TYPE_MISMATCH))
+            if let Some(obj) = non_null {
+                NtResult::from_status(status, || Self { obj: obj.cast() })
             } else {
-                NtResult::from_status(status, || Self {
-                    obj: non_null.unwrap().cast(),
-                })
+                Err(NtStatusError::Status(STATUS_OBJECT_TYPE_MISMATCH))
             }
         }
     }
 
+    ///
+    /// # Safety
+    ///
+    /// As long as T is a valid ptr to an objects it ok
+    ///
     pub unsafe fn from_raw_object(obj: NonNull<T>, reference: bool) -> Self {
         unsafe {
             if reference {
@@ -111,6 +120,11 @@ where
         }
     }
 
+    ///
+    /// # Safety
+    ///
+    /// As long as this objects lives its fine to use it
+    ///
     pub unsafe fn raw_obj(&self) -> *mut T {
         self.obj.as_ptr()
     }
@@ -135,9 +149,7 @@ where
         unsafe {
             let _ = ObfReferenceObject(self.obj.as_ptr().cast());
         }
-        Self {
-            obj: self.obj.clone(),
-        }
+        Self { obj: self.obj }
     }
 }
 

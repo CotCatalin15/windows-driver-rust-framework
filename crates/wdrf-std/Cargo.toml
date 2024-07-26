@@ -16,6 +16,8 @@ widestring.workspace = true
 #ahash.workspace = true
 sealed.workspace = true
 
+nt-string.workspace = true
+
 [dev-dependencies]
 wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build", features = [
     "test-stubs",

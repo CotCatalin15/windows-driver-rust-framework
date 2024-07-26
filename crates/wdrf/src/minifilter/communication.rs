@@ -1,14 +1,16 @@
 use core::{any::Any, num::NonZeroU32, ptr::NonNull};
 
-use wdk_sys::fltmgr::{
-    FltCloseCommunicationPort, FltCreateCommunicationPort, PFLT_CONNECT_NOTIFY,
-    PFLT_DISCONNECT_NOTIFY, PFLT_MESSAGE_NOTIFY, _FLT_PORT,
+use nt_string::unicode_string::NtUnicodeStr;
+use wdk_sys::{
+    fltmgr::{
+        FltCloseCommunicationPort, FltCreateCommunicationPort, PFLT_CONNECT_NOTIFY,
+        PFLT_DISCONNECT_NOTIFY, PFLT_MESSAGE_NOTIFY, _FLT_PORT,
+    },
+    OBJECT_ATTRIBUTES, OBJ_CASE_INSENSITIVE, OBJ_KERNEL_HANDLE,
 };
-use wdrf_std::{kmalloc::TaggedObject, sync::arc::Arc};
+use wdrf_std::{kmalloc::TaggedObject, object::attribute::ObjectAttributes, sync::arc::Arc};
 
-use crate::object::ObjectAttribs;
-
-use super::FltFilter;
+use super::{security_descriptor::FltSecurityDescriptor, FltFilter};
 
 pub struct FltCommunication {
     filter: Arc<FltFilter>,
@@ -34,7 +36,7 @@ impl Drop for FltCommunication {
 
 pub struct FltCommunicationBuilder<'a> {
     filter: Arc<FltFilter>,
-    attribs: &'a ObjectAttribs<'a>,
+    name: NtUnicodeStr<'a>,
     cookie: Option<NonNull<dyn Any>>,
     connect: PFLT_CONNECT_NOTIFY,
     disconnect: PFLT_DISCONNECT_NOTIFY,
@@ -43,10 +45,10 @@ pub struct FltCommunicationBuilder<'a> {
 }
 
 impl<'a> FltCommunicationBuilder<'a> {
-    pub const fn new(filter: Arc<FltFilter>, attribs: &'a ObjectAttribs) -> Self {
+    pub fn new(filter: Arc<FltFilter>, name: NtUnicodeStr<'a>) -> Self {
         Self {
             filter,
-            attribs,
+            name,
             cookie: None,
             connect: None,
             disconnect: None,
@@ -82,12 +84,19 @@ impl<'a> FltCommunicationBuilder<'a> {
 
     pub fn build(self) -> anyhow::Result<FltCommunication> {
         let mut port = core::ptr::null_mut();
+        let security_descriptor = FltSecurityDescriptor::try_default_flt()?;
+        let obj_attribs = ObjectAttributes::new_named_security(
+            &self.name,
+            OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE,
+            &security_descriptor,
+        );
 
+        let ptr: *mut OBJECT_ATTRIBUTES = obj_attribs.as_ref_mut();
         let status = unsafe {
             FltCreateCommunicationPort(
                 self.filter.0.as_ptr(),
                 &mut port,
-                self.attribs.as_ptr() as _,
+                ptr.cast(),
                 core::ptr::null_mut(),
                 self.connect,
                 self.disconnect,

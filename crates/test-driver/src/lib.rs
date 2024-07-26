@@ -1,11 +1,11 @@
 #![no_std]
 
 use core::panic::PanicInfo;
-use core::time::Duration;
 
 use maple::consumer::{get_global_registry, set_global_consumer};
 use maple::{info, trace};
 
+use nt_string::unicode_string::NtUnicodeStr;
 use wdk::{dbg_break, println};
 
 #[cfg(not(test))]
@@ -16,31 +16,20 @@ use wdk_alloc::WDKAllocator;
 static GLOBAL_ALLOCATOR: WDKAllocator = WDKAllocator;
 
 use wdk_sys::fltmgr::{FLT_FILTER_UNLOAD_FLAGS, PFLT_PORT};
-use wdk_sys::ntddk::{KeDelayExecutionThread, KeWaitForSingleObject, PsCreateSystemThread};
-use wdk_sys::_KWAIT_REASON::Executive;
+use wdk_sys::ntddk::KeDelayExecutionThread;
 use wdk_sys::_MODE::KernelMode;
 use wdk_sys::{
     ntddk::KeBugCheckEx, DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING, STATUS_SUCCESS,
     STATUS_UNSUCCESSFUL,
 };
-use wdk_sys::{
-    DELETE, LARGE_INTEGER, OBJ_CASE_INSENSITIVE, OBJ_KERNEL_HANDLE, PKTHREAD, SYNCHRONIZE,
-    THREAD_ALL_ACCESS, UNICODE_STRING,
-};
+use wdk_sys::{LARGE_INTEGER, UNICODE_STRING};
 use wdrf::context::{Context, ContextRegistry, FixedGlobalContextRegistry};
 use wdrf::logger::dbgprint::DbgPrintLogger;
 use wdrf::minifilter::communication::{FltCommunication, FltCommunicationBuilder};
 use wdrf::minifilter::{FltFilter, FltRegistrationBuilder};
-use wdrf::object::{ObjectAttribs, SecurityDescriptor};
-use wdrf_std::object::handle::Handle;
-use wdrf_std::object::object::ArcKernelObj;
-use wdrf_std::object::KernelObjectType;
 use wdrf_std::slice::slice_from_raw_parts_mut_or_empty;
-use wdrf_std::string::ntunicode::AsUnicodeString;
 use wdrf_std::sync::arc::{Arc, ArcExt};
-use wdrf_std::sync::event::Event;
-use wdrf_std::sys::event::{EventType, KeEvent};
-use wdrf_std::sys::{MultiWaitArray, WaitableObject};
+use widestring::Utf16Str;
 
 pub mod collector;
 
@@ -94,10 +83,6 @@ pub unsafe extern "system" fn driver_entry(
     driver: &mut DRIVER_OBJECT,
     registry_path: PCUNICODE_STRING,
 ) -> NTSTATUS {
-    if test() {
-        return STATUS_UNSUCCESSFUL;
-    }
-
     match driver_main(driver, &*registry_path) {
         Ok(_) => STATUS_SUCCESS,
         Err(_) => STATUS_UNSUCCESSFUL,
@@ -105,17 +90,9 @@ pub unsafe extern "system" fn driver_entry(
 }
 
 fn create_communication(filter: &Arc<FltFilter>) -> anyhow::Result<FltCommunication> {
-    let name = widestring::u16cstr!("\\TESTPORT");
-    let port_name = unsafe { name.as_unicode() };
-    let descriptor = SecurityDescriptor::try_default_flt()?;
+    let port_name = nt_string::nt_unicode_str!("\\TESTPORT");
 
-    let attribs = ObjectAttribs::new(
-        &port_name,
-        OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE,
-        &descriptor,
-    );
-
-    FltCommunicationBuilder::new(filter.clone(), &attribs)
+    FltCommunicationBuilder::new(filter.clone(), port_name)
         .connect(Some(flt_comm_connection))
         .disconnect(Some(flt_comm_disconnect))
         .message(Some(flt_comm_notify))

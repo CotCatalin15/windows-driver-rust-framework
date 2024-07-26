@@ -6,13 +6,10 @@ pub mod context;
 pub mod driver;
 pub mod logger;
 pub mod minifilter;
-pub mod object;
 pub mod process;
 
 use driver::{DriverDispatch, DriverObject};
-use wdk_sys::{
-    DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING,
-};
+use wdk_sys::{DRIVER_OBJECT, NTSTATUS, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING};
 
 pub struct FrameworkContext;
 

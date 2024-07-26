@@ -1,3 +1,8 @@
+pub mod communication;
+pub mod fs;
+pub mod io;
+pub mod security_descriptor;
+
 use core::{mem::MaybeUninit, ptr::NonNull};
 
 use wdk_sys::{
@@ -9,10 +14,6 @@ use wdk_sys::{
     DRIVER_OBJECT,
 };
 use wdrf_std::kmalloc::TaggedObject;
-
-pub mod communication;
-pub mod fs;
-pub mod io;
 
 pub struct FltRegistration(_FLT_REGISTRATION);
 
