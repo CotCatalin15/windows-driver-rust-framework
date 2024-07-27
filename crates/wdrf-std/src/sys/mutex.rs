@@ -1,21 +1,22 @@
 use core::cell::UnsafeCell;
 
-use wdk_sys::{
-    ntddk::{
-        ExAcquireSpinLockExclusive, ExAcquireSpinLockShared, ExReleaseSpinLockExclusive,
-        ExReleaseSpinLockShared, KeAcquireGuardedMutex, KeAcquireSpinLockRaiseToDpc,
-        KeInitializeGuardedMutex, KeInitializeSpinLock, KeReleaseGuardedMutex, KeReleaseSpinLock,
-    },
-    APC_LEVEL, EX_SPIN_LOCK, KGUARDED_MUTEX, KSPIN_LOCK,
-};
-
 #[cfg(feature = "irql-checks")]
 use wdrf_macros::irql_check;
+
+use windows_sys::Wdk::{
+    Foundation::FAST_MUTEX,
+    System::SystemServices::{
+        ExAcquireSpinLockExclusive, ExAcquireSpinLockShared, ExReleaseSpinLockExclusive,
+        ExReleaseSpinLockShared, KeAcquireGuardedMutex, KeAcquireInStackQueuedSpinLock,
+        KeInitializeGuardedMutex, KeInitializeSpinLock, KeReleaseGuardedMutex,
+        KeReleaseInStackQueuedSpinLock, APC_LEVEL, KLOCK_QUEUE_HANDLE,
+    },
+};
 
 use crate::traits::{DispatchSafe, ReadLock, WriteLock};
 
 pub struct GuardedMutex {
-    inner: UnsafeCell<KGUARDED_MUTEX>,
+    inner: UnsafeCell<FAST_MUTEX>,
 }
 
 unsafe impl Send for GuardedMutex {}
@@ -58,8 +59,8 @@ impl WriteLock for GuardedMutex {
 }
 
 pub struct SpinLock {
-    inner: UnsafeCell<KSPIN_LOCK>,
-    old_irql: UnsafeCell<u8>,
+    inner: UnsafeCell<usize>,
+    lock_handle: UnsafeCell<KLOCK_QUEUE_HANDLE>,
 }
 
 unsafe impl DispatchSafe for SpinLock {}
@@ -67,11 +68,11 @@ unsafe impl DispatchSafe for SpinLock {}
 impl SpinLock {
     pub fn new() -> Self {
         unsafe {
-            let mut mutex = core::mem::zeroed();
+            let mut mutex = 0;
             KeInitializeSpinLock(&mut mutex);
             Self {
                 inner: UnsafeCell::new(mutex),
-                old_irql: UnsafeCell::new(0),
+                lock_handle: UnsafeCell::new(core::mem::zeroed()),
             }
         }
     }
@@ -87,21 +88,20 @@ impl WriteLock for SpinLock {
     #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
     fn lock(&self) {
         unsafe {
-            let old_irql = KeAcquireSpinLockRaiseToDpc(self.inner.get());
-            *self.old_irql.get() = old_irql;
+            KeAcquireInStackQueuedSpinLock(self.inner.get(), self.lock_handle.get());
         }
     }
 
     #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL, compare = IrqlCompare::Eq))]
     fn unlock(&self) {
         unsafe {
-            KeReleaseSpinLock(self.inner.get(), *self.old_irql.get());
+            KeReleaseInStackQueuedSpinLock(self.lock_handle.get());
         }
     }
 }
 
 pub struct ExSpinLock {
-    inner: UnsafeCell<EX_SPIN_LOCK>,
+    inner: UnsafeCell<i32>,
     old_irql: UnsafeCell<u8>,
 }
 

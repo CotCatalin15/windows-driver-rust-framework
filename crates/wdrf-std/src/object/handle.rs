@@ -1,8 +1,8 @@
+use windows_sys::{Wdk::System::SystemServices::ZwClose, Win32::Foundation::HANDLE};
+
 use crate::traits::DispatchSafe;
 
 use super::KernelObjectType;
-
-use wdk_sys::{ntddk::ZwClose, HANDLE};
 
 pub struct Handle {
     object_type: Option<KernelObjectType>,

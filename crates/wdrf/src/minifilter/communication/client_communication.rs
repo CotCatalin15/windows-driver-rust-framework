@@ -1,13 +1,7 @@
 use core::{cell::Cell, num::NonZeroU32, ptr::NonNull, time::Duration};
 
 use nt_string::unicode_string::NtUnicodeStr;
-use wdk::dbg_break;
-use wdk_sys::{
-    fltmgr::{
-        FltCloseClientPort, FltSendMessage, PFLT_PORT, _FLT_FILTER, _FLT_PORT, _LARGE_INTEGER,
-    },
-    NTSTATUS, STATUS_INSUFFICIENT_RESOURCES, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
-};
+
 use wdrf_std::{
     boxed::{Box, BoxExt},
     kmalloc::{GlobalKernelAllocator, TaggedObject},
@@ -16,7 +10,16 @@ use wdrf_std::{
         tracked_slice::TrackedSlice,
     },
     sync::arc::{Arc, ArcExt},
-    NtResult, NtResultEx,
+    NtResult, NtResultEx, NtStatusError,
+};
+use windows_sys::{
+    Wdk::Storage::FileSystem::Minifilters::{
+        FltCloseClientPort, FltSendMessage, PFLT_FILTER, PFLT_PORT,
+    },
+    Win32::Foundation::{
+        NTSTATUS, STATUS_INSUFFICIENT_RESOURCES, STATUS_NO_MEMORY, STATUS_SUCCESS,
+        STATUS_UNSUCCESSFUL,
+    },
 };
 
 use crate::minifilter::FltFilter;
@@ -41,8 +44,8 @@ pub trait FltCommunicationCallback {
 }
 
 pub struct FltClient<Cookie: 'static + Send> {
-    filter: NonNull<_FLT_FILTER>,
-    client: NonNull<_FLT_PORT>,
+    filter: PFLT_FILTER,
+    client: PFLT_PORT,
     cookie: Cell<Option<Cookie>>,
     server_cookie: NonNull<u8>,
 
@@ -50,7 +53,12 @@ pub struct FltClient<Cookie: 'static + Send> {
 }
 
 impl<Cookie: 'static + Send> FltClient<Cookie> {
-    pub unsafe fn as_ptr(&self) -> NonNull<_FLT_PORT> {
+    ///
+    /// # Safety
+    ///
+    /// Safe as long as you dont do something bad :)
+    ///
+    pub unsafe fn as_handle(&self) -> PFLT_PORT {
         self.client
     }
 
@@ -60,16 +68,14 @@ impl<Cookie: 'static + Send> FltClient<Cookie> {
 
     pub fn send_with_reply(&self, input: &[u8], output: Option<&mut [u8]>) -> NtResult<u32> {
         unsafe {
-            let mut client = self.client.as_ptr();
-
             let mut reply_size = output.as_ref().map_or_else(|| 0, |buff| buff.len()) as _;
 
             let status = FltSendMessage(
-                self.filter.as_ptr(),
-                &mut client,
+                self.filter,
+                &self.client,
                 input.as_ptr() as _,
                 input.len() as _,
-                output.map_or_else(|| core::ptr::null_mut(), |buff| buff.as_ptr() as _),
+                output.map_or_else(core::ptr::null_mut, |buff| buff.as_ptr() as _),
                 &mut reply_size,
                 core::ptr::null_mut(),
             );
@@ -85,21 +91,20 @@ impl<Cookie: 'static + Send> FltClient<Cookie> {
         duration: Duration,
     ) -> NtResult<u32> {
         unsafe {
-            let mut client = self.client.as_ptr();
+            let client = self.client;
 
-            let mut timeout: _LARGE_INTEGER = core::mem::zeroed();
-            timeout.QuadPart = -((duration.as_nanos() / 100) as i64);
+            let timeout = -((duration.as_nanos() / 100) as i64);
 
             let mut reply_size = output.as_ref().map_or_else(|| 0, |buff| buff.len()) as _;
 
             let status = FltSendMessage(
-                self.filter.as_ptr(),
-                &mut client,
+                self.filter,
+                &client,
                 input.as_ptr() as _,
                 input.len() as _,
-                output.map_or_else(|| core::ptr::null_mut(), |buff| buff.as_ptr() as _),
+                output.map_or_else(core::ptr::null_mut, |buff| buff.as_ptr() as _),
                 &mut reply_size,
-                &mut timeout,
+                &timeout,
             );
 
             NtResult::from_status(status, || reply_size)
@@ -111,8 +116,8 @@ impl<Cookie: 'static + Send> Drop for FltClient<Cookie> {
     fn drop(&mut self) {
         unsafe {
             if self.owned.get() {
-                let mut client_ptr = self.client.as_ptr();
-                FltCloseClientPort(self.filter.as_ptr(), &mut client_ptr);
+                let mut client_ptr = self.client;
+                FltCloseClientPort(self.filter, &mut client_ptr);
             }
         }
     }
@@ -147,6 +152,7 @@ impl<CB: FltCommunicationCallback> TaggedObject for FltClientCommunicationInner<
     }
 }
 
+#[allow(dead_code)]
 pub struct FltClientCommunication<CB>
 where
     CB: FltCommunicationCallback,
@@ -166,7 +172,7 @@ where
         filter: Arc<FltFilter>,
         name: NtUnicodeStr,
         max_connections: NonZeroU32,
-    ) -> anyhow::Result<Self> {
+    ) -> NtResult<Self> {
         let storage = match max_connections.get() {
             1 => FltCommunicationStorage::SingleClient(None),
             _ => FltCommunicationStorage::MultiClient(),
@@ -178,7 +184,8 @@ where
             storage,
         };
 
-        let mut cookie = Box::try_create(inner)?;
+        let mut cookie =
+            Box::try_create(inner).map_err(|_| NtStatusError::Status(STATUS_NO_MEMORY))?;
 
         let port = unsafe {
             let cookie_ptr: *mut FltClientCommunicationInner<CB> = cookie.as_mut();
@@ -200,23 +207,21 @@ where
     }
 }
 
-unsafe extern "C" fn flt_comm_connection<CB: FltCommunicationCallback>(
+unsafe extern "system" fn flt_comm_connection<CB: FltCommunicationCallback>(
     client_port: PFLT_PORT,
-    server_cookie: *mut core::ffi::c_void,
-    connection_context: *mut core::ffi::c_void,
+    server_cookie: *const core::ffi::c_void,
+    connection_context: *const core::ffi::c_void,
     size_of_context: u32,
     connection_port_cookie: *mut *mut core::ffi::c_void,
 ) -> NTSTATUS {
-    dbg_break();
-
-    let server_cookie_ptr: *mut FltClientCommunicationInner<CB> = server_cookie.cast();
+    let server_cookie_ptr: *mut FltClientCommunicationInner<CB> = server_cookie as _;
     let server_cookie = &mut *server_cookie_ptr;
 
     let communication = server_cookie.communication.as_ref().unwrap();
 
     let client: FltClient<CB::ClientCookie> = FltClient {
-        filter: communication.filter.as_ptr(),
-        client: NonNull::new(client_port).unwrap(),
+        filter: communication.filter.as_handle(),
+        client: client_port,
         cookie: Cell::new(None),
         server_cookie: NonNull::new(server_cookie_ptr.cast()).unwrap(),
         owned: Cell::new(false),
@@ -233,7 +238,7 @@ unsafe extern "C" fn flt_comm_connection<CB: FltCommunicationCallback>(
     let buffer =
         slice_from_raw_parts_or_empty(connection_context as *const u8, size_of_context as _);
 
-    let cookie = server_cookie.callbacks.on_connect(&client, &buffer);
+    let cookie = server_cookie.callbacks.on_connect(&client, buffer);
 
     match cookie {
         Ok(cookie) => {
@@ -256,11 +261,9 @@ unsafe extern "C" fn flt_comm_connection<CB: FltCommunicationCallback>(
     }
 }
 
-unsafe extern "C" fn flt_comm_disconnect<CB: FltCommunicationCallback>(
-    client_cookie: *mut core::ffi::c_void,
+unsafe extern "system" fn flt_comm_disconnect<CB: FltCommunicationCallback>(
+    client_cookie: *const core::ffi::c_void,
 ) {
-    dbg_break();
-
     let client_cookie: *const FltClient<CB::ClientCookie> = client_cookie.cast();
 
     let client_cookie = Arc::from_raw_in(
@@ -279,15 +282,14 @@ unsafe extern "C" fn flt_comm_disconnect<CB: FltCommunicationCallback>(
     server_cookie.storage = FltCommunicationStorage::SingleClient(None);
 }
 
-unsafe extern "C" fn flt_comm_notify<CB: FltCommunicationCallback>(
-    client_cookie: *mut core::ffi::c_void,
-    input_buffer: *mut core::ffi::c_void,
+unsafe extern "system" fn flt_comm_notify<CB: FltCommunicationCallback>(
+    client_cookie: *const core::ffi::c_void,
+    input_buffer: *const core::ffi::c_void,
     input_buffer_length: u32,
     output_buffer: *mut core::ffi::c_void,
     output_buffer_length: u32,
     return_output_buffer_length: *mut u32,
 ) -> NTSTATUS {
-    dbg_break();
     *return_output_buffer_length = 0;
 
     let client_cookie: *const FltClient<CB::ClientCookie> = client_cookie.cast();
@@ -306,7 +308,7 @@ unsafe extern "C" fn flt_comm_notify<CB: FltCommunicationCallback>(
 
     match server_cookie
         .callbacks
-        .on_message(client_cookie, &input, &mut tracked_output)
+        .on_message(client_cookie, input, &mut tracked_output)
     {
         Ok(_) => {
             *return_output_buffer_length = tracked_output.bytes_written() as _;

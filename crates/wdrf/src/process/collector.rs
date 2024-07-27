@@ -1,18 +1,19 @@
 use core::cell::UnsafeCell;
 
-use wdk_sys::{
-    ntddk::PsSetCreateProcessNotifyRoutineEx, HANDLE, PEPROCESS, PPS_CREATE_NOTIFY_INFO,
-    _PS_CREATE_NOTIFY_INFO,
-};
 use wdrf_std::{
     hashbrown::{HashMap, HashMapExt, OccupiedError},
     kmalloc::TaggedObject,
+    structs::{PEPROCESS, PKPROCESS},
     sync::{
         arc::{Arc, ArcExt},
         rwlock::ExRwLock,
     },
     traits::DispatchSafe,
     NtResult, NtResultEx,
+};
+use windows_sys::{
+    Wdk::System::SystemServices::{PsSetCreateProcessNotifyRoutineEx, PS_CREATE_NOTIFY_INFO},
+    Win32::Foundation::HANDLE,
 };
 
 pub trait ProcessDescriptor {
@@ -26,7 +27,7 @@ pub trait ProcessHook {
         &mut self,
         process: PEPROCESS,
         process_id: HANDLE,
-        create_info: &_PS_CREATE_NOTIFY_INFO,
+        create_info: &PS_CREATE_NOTIFY_INFO,
     ) -> anyhow::Result<Self::Item>;
 
     fn on_process_destroy(&mut self, item: &Self::Item);
@@ -102,7 +103,7 @@ trait ProcessCollectorCallbacks {
         &mut self,
         process: PEPROCESS,
         process_id: HANDLE,
-        create_info: PPS_CREATE_NOTIFY_INFO,
+        create_info: &PS_CREATE_NOTIFY_INFO,
     ) -> anyhow::Result<()>;
 
     fn on_process_destroy(&mut self, process: PEPROCESS, process_id: HANDLE);
@@ -113,10 +114,8 @@ impl<H: ProcessHook + Send + DispatchSafe> ProcessCollectorCallbacks for Process
         &mut self,
         process: PEPROCESS,
         process_id: HANDLE,
-        create_info: PPS_CREATE_NOTIFY_INFO,
+        create_info: &PS_CREATE_NOTIFY_INFO,
     ) -> anyhow::Result<()> {
-        let create_info = unsafe { &*create_info };
-
         let item = self
             .hook
             .on_process_create(process, process_id, create_info)?;
@@ -143,16 +142,17 @@ impl<H: ProcessHook + Send + DispatchSafe> ProcessCollectorCallbacks for Process
 
 static mut GLOBAL_PROCESS_COLLECTOR: Option<&'static mut dyn ProcessCollectorCallbacks> = None;
 
-unsafe extern "C" fn create_process_notify_implementation(
-    process: PEPROCESS,
+unsafe extern "system" fn create_process_notify_implementation(
+    process: HANDLE,
     process_id: HANDLE,
-    create_info: PPS_CREATE_NOTIFY_INFO,
+    create_info: *mut PS_CREATE_NOTIFY_INFO,
 ) {
+    let process: PKPROCESS = process as _;
     if let Some(ref mut callbacks) = GLOBAL_PROCESS_COLLECTOR {
         if create_info.is_null() {
             callbacks.on_process_destroy(process, process_id);
         } else {
-            let _ = callbacks.on_process_create(process, process_id, create_info);
+            let _ = callbacks.on_process_create(process, process_id, &*create_info);
         }
     }
 }

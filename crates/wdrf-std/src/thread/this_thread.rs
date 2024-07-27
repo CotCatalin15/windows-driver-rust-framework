@@ -1,12 +1,10 @@
 use core::{ptr::NonNull, time::Duration};
 
-use wdk_sys::{
-    ntddk::{KeDelayExecutionThread, PsGetCurrentThreadId},
-    LARGE_INTEGER, PKTHREAD,
-    _MODE::KernelMode,
+use windows_sys::Wdk::System::SystemServices::{
+    KeDelayExecutionThread, KernelMode, PsGetCurrentThreadId,
 };
 
-use crate::object::ArcKernelObj;
+use crate::{object::ArcKernelObj, structs::PKTHREAD};
 
 pub fn this_thread_object() -> ArcKernelObj<PKTHREAD> {
     unsafe {
@@ -18,9 +16,8 @@ pub fn this_thread_object() -> ArcKernelObj<PKTHREAD> {
 
 pub fn delay_execution(duration: Duration) {
     unsafe {
-        let mut timeout: LARGE_INTEGER = core::mem::zeroed();
-        timeout.QuadPart = -((duration.as_nanos() / 100) as i64);
+        let timeout = -((duration.as_nanos() / 100) as i64);
 
-        let _ = KeDelayExecutionThread(KernelMode as _, false as _, &mut timeout);
+        let _ = KeDelayExecutionThread(KernelMode as _, false as _, &timeout);
     }
 }

@@ -5,9 +5,8 @@ edition.workspace = true
 repository.workspace = true
 
 [dependencies]
-wdk-sys.workspace = true
+windows-sys.workspace = true
 wdrf-macros.workspace = true
-wdk.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 hashbrown.workspace = true
@@ -15,13 +14,9 @@ allocator-api2.workspace = true
 widestring.workspace = true
 #ahash.workspace = true
 sealed.workspace = true
+bitflags.workspace = true
 
 nt-string.workspace = true
-
-[dev-dependencies]
-wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build", features = [
-    "test-stubs",
-] }
 
 [features]
 default = ["dev-features"]

@@ -1,22 +1,29 @@
 pub mod client_communication;
 
-use core::{any::Any, num::NonZeroU32, ptr::NonNull};
+use core::{num::NonZeroU32, ptr::NonNull};
 
 use nt_string::unicode_string::NtUnicodeStr;
-use wdk_sys::{
-    fltmgr::{
-        FltCloseCommunicationPort, FltCreateCommunicationPort, PFLT_CONNECT_NOTIFY,
-        PFLT_DISCONNECT_NOTIFY, PFLT_MESSAGE_NOTIFY, _FLT_PORT,
-    },
-    OBJECT_ATTRIBUTES, OBJ_CASE_INSENSITIVE, OBJ_KERNEL_HANDLE,
+
+use wdrf_std::{
+    kmalloc::TaggedObject, object::attribute::ObjectAttributes, sync::arc::Arc, NtResult,
+    NtResultEx,
 };
-use wdrf_std::{kmalloc::TaggedObject, object::attribute::ObjectAttributes, sync::arc::Arc};
+use windows_sys::{
+    Wdk::{
+        Foundation::OBJECT_ATTRIBUTES,
+        Storage::FileSystem::Minifilters::{
+            FltCloseCommunicationPort, FltCreateCommunicationPort, PFLT_CONNECT_NOTIFY,
+            PFLT_DISCONNECT_NOTIFY, PFLT_MESSAGE_NOTIFY, PFLT_PORT,
+        },
+    },
+    Win32::System::Kernel::{OBJ_CASE_INSENSITIVE, OBJ_KERNEL_HANDLE},
+};
 
 use super::{security_descriptor::FltSecurityDescriptor, FltFilter};
 
 pub struct FltPort {
     filter: Arc<FltFilter>,
-    port: NonNull<_FLT_PORT>,
+    port: PFLT_PORT,
     max_clients: u32,
 }
 
@@ -77,8 +84,8 @@ impl<'a> FltPortCommunicationBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> anyhow::Result<FltPort> {
-        let mut port = core::ptr::null_mut();
+    pub fn build(self) -> NtResult<FltPort> {
+        let mut port = 0;
         let security_descriptor = FltSecurityDescriptor::try_default_flt()?;
         let obj_attribs = ObjectAttributes::new_named_security(
             &self.name,
@@ -94,7 +101,7 @@ impl<'a> FltPortCommunicationBuilder<'a> {
         };
         let status = unsafe {
             FltCreateCommunicationPort(
-                self.filter.0.as_ptr(),
+                self.filter.as_handle(),
                 &mut port,
                 ptr.cast(),
                 cookie,
@@ -104,29 +111,31 @@ impl<'a> FltPortCommunicationBuilder<'a> {
                 self.max_connections.get() as _,
             )
         };
-        if !wdk::nt_success(status) {
-            Err(anyhow::Error::msg("Failed to create communication port"))
-        } else {
-            let port = NonNull::new(port).unwrap();
-            Ok(FltPort::new(self.filter, port, self.max_connections.get()))
-        }
+
+        NtResult::from_status(status, || {
+            FltPort::new(self.filter, port, self.max_connections.get())
+        })
     }
 }
 
 impl FltPort {
-    fn new(filter: Arc<FltFilter>, port: NonNull<_FLT_PORT>, max_clients: u32) -> Self {
+    fn new(filter: Arc<FltFilter>, port: isize, max_clients: u32) -> Self {
         Self {
             filter,
             port,
             max_clients,
         }
     }
+
+    pub fn max_clients(&self) -> u32 {
+        self.max_clients
+    }
 }
 
 impl Drop for FltPort {
     fn drop(&mut self) {
         unsafe {
-            FltCloseCommunicationPort(self.port.as_ptr());
+            FltCloseCommunicationPort(self.port);
         }
     }
 }

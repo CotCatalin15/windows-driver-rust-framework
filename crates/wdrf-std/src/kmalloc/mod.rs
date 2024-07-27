@@ -1,15 +1,12 @@
 use core::{
-    alloc::{Allocator, Layout},
+    alloc::{Allocator, GlobalAlloc, Layout},
     ptr::NonNull,
 };
 
 use thiserror::Error;
-use wdk_sys::{
-    ntddk::{ExAllocatePool2, ExFreePoolWithTag},
-    POOL_FLAG_NON_PAGED,
-};
+use windows_sys::Wdk::System::SystemServices::{ExAllocatePool2, ExFreePoolWithTag};
 
-pub mod lookaside;
+use crate::constants::PoolFlags;
 
 #[derive(Clone, Copy)]
 pub struct MemoryTag {
@@ -37,8 +34,8 @@ pub trait TaggedObject {
         //Default kernel memory tag
         MemoryTag::new_from_bytes(b"dkmt")
     }
-    fn flags() -> u64 {
-        POOL_FLAG_NON_PAGED
+    fn flags() -> PoolFlags {
+        PoolFlags::POOL_FLAG_NON_PAGED
     }
 }
 
@@ -56,16 +53,6 @@ impl TaggedObject for u64 {}
 
 impl TaggedObject for () {}
 
-impl<T> TaggedObject for dyn FnOnce() -> T {
-    fn tag() -> MemoryTag {
-        MemoryTag::new_from_bytes(b"func")
-    }
-
-    fn flags() -> u64 {
-        POOL_FLAG_NON_PAGED
-    }
-}
-
 #[derive(Error, Debug)]
 pub enum AllocError {
     #[error("Out of memory")]
@@ -82,8 +69,8 @@ pub enum AllocError {
 ///
 /// * `layout` must be valid
 ///
-pub unsafe fn alloc(tag: MemoryTag, flags: u64, layout: Layout) -> *mut u8 {
-    ExAllocatePool2(flags, layout.size() as u64, tag.tag).cast()
+pub unsafe fn alloc(tag: MemoryTag, flags: PoolFlags, layout: Layout) -> *mut u8 {
+    ExAllocatePool2(flags.bits(), layout.size(), tag.tag).cast()
 }
 
 /// Deallocates the memory referenced by `ptr`.
@@ -109,7 +96,7 @@ pub unsafe fn dealloc(ptr: *mut u8, tag: MemoryTag, _layout: Layout) {
 #[derive(Clone, Copy)]
 pub struct GlobalKernelAllocator {
     tag: MemoryTag,
-    flags: u64,
+    flags: PoolFlags,
 
     #[cfg(test)]
     fail_alloc: bool,
@@ -119,7 +106,7 @@ unsafe impl Send for GlobalKernelAllocator {}
 unsafe impl Sync for GlobalKernelAllocator {}
 
 impl GlobalKernelAllocator {
-    pub fn new(tag: MemoryTag, flags: u64) -> Self {
+    pub const fn new(tag: MemoryTag, flags: PoolFlags) -> Self {
         Self {
             tag,
             flags,
@@ -218,5 +205,20 @@ unsafe impl allocator_api2::alloc::Allocator for GlobalKernelAllocator {
     #[inline]
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
         self.deallocate_internal(ptr, layout);
+    }
+}
+
+unsafe impl GlobalAlloc for GlobalKernelAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let ptr = self.allocate_internal(layout);
+
+        match ptr {
+            Ok(p) => p.as_ptr().as_mut_ptr(),
+            Err(_) => core::ptr::null_mut(),
+        }
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        self.deallocate_internal(NonNull::new(ptr).unwrap(), layout);
     }
 }

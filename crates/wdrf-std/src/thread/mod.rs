@@ -2,15 +2,23 @@ pub mod this_thread;
 
 use core::cell::UnsafeCell;
 
-use wdk_sys::{
-    ntddk::PsCreateSystemThread, DELETE, OBJ_KERNEL_HANDLE, PKTHREAD, POOL_FLAG_PAGED,
-    STATUS_NO_MEMORY, SYNCHRONIZE, THREAD_ALL_ACCESS,
+use windows_sys::{
+    Wdk::System::SystemServices::PsCreateSystemThread,
+    Win32::{
+        Foundation::{HANDLE, STATUS_NO_MEMORY},
+        System::{Kernel::OBJ_KERNEL_HANDLE, Threading::THREAD_ALL_ACCESS},
+    },
 };
+
+use windows_sys::Win32::Storage::FileSystem::{DELETE, SYNCHRONIZE};
 
 use crate::{
     boxed::{Box, BoxExt},
+    constants::PoolFlags,
     kmalloc::{GlobalKernelAllocator, MemoryTag, TaggedObject},
+    nt_success,
     object::{attribute::ObjectAttributes, ArcKernelObj},
+    structs::PKTHREAD,
     sync::arc::{Arc, ArcExt},
     sys::{WaitableKernelObject, WaitableObject},
     NtResult, NtStatusError,
@@ -37,7 +45,10 @@ where
     {
         let fnc = Box::try_create_in(
             fnc,
-            GlobalKernelAllocator::new(MemoryTag::new_from_bytes(b"func"), POOL_FLAG_PAGED),
+            GlobalKernelAllocator::new(
+                MemoryTag::new_from_bytes(b"func"),
+                PoolFlags::POOL_FLAG_NON_PAGED,
+            ),
         )?;
 
         let inner = InnerPacket {
@@ -62,6 +73,12 @@ where
 
 pub struct JoinHandle<T> {
     packet: Arc<Packet<T>>,
+}
+
+impl<T> Drop for JoinHandle<T> {
+    fn drop(&mut self) {
+        let _ = self.wait();
+    }
 }
 
 unsafe impl<T> Send for JoinHandle<T> {}
@@ -108,23 +125,24 @@ where
     let packet = Arc::try_create(p).map_err(|_| NtStatusError::Status(STATUS_NO_MEMORY))?;
 
     unsafe {
-        let mut handle: wdk_sys::HANDLE = core::ptr::null_mut();
+        let mut handle: HANDLE = 0;
 
         let leaked = Arc::into_raw(packet.clone());
 
         let obj = ObjectAttributes::new(OBJ_KERNEL_HANDLE);
 
+        let fnc: unsafe extern "system" fn(*mut core::ffi::c_void) = thread_main::<T>;
         let status = PsCreateSystemThread(
             &mut handle,
-            SYNCHRONIZE | DELETE,
+            DELETE | SYNCHRONIZE,
             obj.as_ref_mut(),
+            0,
             core::ptr::null_mut(),
-            core::ptr::null_mut(),
-            Some(thread_main::<T>),
+            Some(core::mem::transmute(fnc)), //
             leaked as _,
         );
 
-        if !wdk::nt_success(status) {
+        if nt_success(status) {
             let _ = Arc::from_raw_in(leaked, GlobalKernelAllocator::new_for_tagged::<Packet<T>>());
             Err(NtStatusError::Status(status))
         } else {
@@ -137,7 +155,7 @@ where
 
 impl<T> Packet<T> where T: 'static + Send {}
 
-unsafe extern "C" fn thread_main<T: 'static + Send>(context: *mut core::ffi::c_void) {
+unsafe extern "system" fn thread_main<T: 'static + Send>(context: *mut core::ffi::c_void) {
     let leaked: *const Packet<T> = context as _;
 
     let packet = Arc::from_raw_in(leaked, GlobalKernelAllocator::new_for_tagged::<Packet<T>>());

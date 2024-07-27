@@ -5,18 +5,19 @@ edition.workspace = true
 repository.workspace = true
 
 [dependencies]
+windows-sys.workspace = true
+
 wdrf-std.workspace = true
 wdrf = { path = "../wdrf", version = "0.1.0", features = ["minifilter"] }
 anyhow.workspace = true
-wdk.workspace = true
-wdk-alloc.workspace = true
-wdk-sys.workspace = true
 widestring.workspace = true
 maple.workspace = true
 nt-string.workspace = true
+wdk-sys = { version = "0.2.0" }
 
 [build-dependencies]
-wdk-build.workspace = true
+wdk-build = { version = "0.2.0" }
+
 
 [lib]
 crate-type = ["cdylib"]

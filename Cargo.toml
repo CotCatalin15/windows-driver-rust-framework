@@ -19,12 +19,32 @@ repository = "https://github.com/CotCatalin15/windows-driver-rust-framework"
 
 [workspace.dependencies]
 #Wdk driver crates
-wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
-wdk-build = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
-wdk = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
-wdk-macros = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
-wdk-alloc = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
-wdk-panic = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
+#wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
+#wdk-build = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
+#wdk = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
+#wdk-macros = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
+#wdk-alloc = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
+#wdk-panic = { git = "https://github.com/CotCatalin15/windows-drivers-rs", version = "0.2.0", branch = "features/minifilter-build" }
+
+windows-sys = { version = "0.52", features = [
+    "Wdk_Foundation",
+    "Wdk_Storage",
+    "Win32_Storage",
+    "Win32",
+    "Win32_Storage_FileSystem",
+    "Wdk_Storage_FileSystem",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Wdk_System_SystemServices",
+    "Wdk_Storage_FileSystem_Minifilters",
+    "Win32_Storage_InstallableFileSystems",
+    "Win32_System_IO",
+    "Win32_System_Kernel",
+    "Win32_System_Power",
+    "Win32_System_WindowsProgramming",
+    "Win32_System_Threading",
+] }
+
 
 derive_builder = { version = "0.20.0" }
 
@@ -41,7 +61,7 @@ hashbrown = { version = "0.14.3", default-features = false, features = [
 #Required for hashbrown 
 allocator-api2 = { version = "0.2.18", default-features = false }
 #ahash = { version = "0.8.11", default-features = false }
-
+bitflags = { version = "2.6.0" }
 widestring = { version = "1.1.0", default-features = false }
 nt-string = { version = "0.1.1", default-features = false, features = [
     "alloc",

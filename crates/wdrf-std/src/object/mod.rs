@@ -2,22 +2,28 @@ pub mod attribute;
 pub mod handle;
 
 use handle::Handle;
-use wdk_sys::{
-    ExEventObjectType, ExSemaphoreObjectType, IoFileObjectType, PsProcessType, PsThreadType,
-    SeTokenObjectType, TmEnlistmentObjectType, TmResourceManagerObjectType,
-    TmTransactionManagerObjectType, TmTransactionObjectType, POBJECT_TYPE,
+use windows_sys::Wdk::Foundation::POBJECT_TYPE;
+use windows_sys::Wdk::System::SystemServices::{
+    KernelMode, ObReferenceObjectByHandle, ObfDereferenceObject, ObfReferenceObject,
 };
+use windows_sys::Win32::Foundation::{HANDLE, STATUS_OBJECT_TYPE_MISMATCH};
 
 use core::ptr::NonNull;
 
-use wdk_sys::ntddk::{ObfDereferenceObject, ObfReferenceObject};
-use wdk_sys::{ntddk::ObReferenceObjectByHandle, _MODE::KernelMode};
-
-use wdk_sys::{
-    HANDLE, PACCESS_TOKEN, PFILE_OBJECT, PKENLISTMENT, PKEVENT, PKPROCESS, PKRESOURCEMANAGER,
-    PKSEMAPHORE, PKTHREAD, PKTM, PKTRANSACTION, STATUS_OBJECT_TYPE_MISMATCH,
+use crate::constants::{
+    ExEventObjectType, ExSemaphoreObjectType, IoFileObjectType, PsProcessType, PsThreadType,
+    SeTokenObjectType, TmEnlistmentObjectType, TmResourceManagerObjectType,
+    TmTransactionManagerObjectType, TmTransactionObjectType,
 };
-
+use crate::structs::PKENLISTMENT;
+use crate::structs::PKEVENT;
+use crate::structs::PKPROCESS;
+use crate::structs::PKSEMAPHORE;
+use crate::structs::PKTM;
+use crate::structs::PKTRANSACTION;
+use crate::structs::PPROCESS_ACCESS_TOKEN;
+use crate::structs::PRKRESOURCEMANAGER;
+use crate::structs::{PFILE_OBJECT, PKTHREAD};
 use crate::sys::WaitableObject;
 use crate::{NtResult, NtResultEx, NtStatusError};
 
@@ -170,11 +176,11 @@ impl_kernel_resource!(PFILE_OBJECT, KernelObjectType::File);
 impl_kernel_resource!(PKPROCESS, KernelObjectType::Process);
 impl_kernel_resource!(PKTHREAD, KernelObjectType::Thread);
 
-impl_kernel_resource!(PACCESS_TOKEN, KernelObjectType::Token);
+impl_kernel_resource!(PPROCESS_ACCESS_TOKEN, KernelObjectType::Token);
 
 impl_kernel_resource!(PKENLISTMENT, KernelObjectType::Enlistment);
 
-impl_kernel_resource!(PKRESOURCEMANAGER, KernelObjectType::ResourceManager);
+impl_kernel_resource!(PRKRESOURCEMANAGER, KernelObjectType::ResourceManager);
 impl_kernel_resource!(PKTM, KernelObjectType::TranscationManager);
 impl_kernel_resource!(PKTRANSACTION, KernelObjectType::Transcation);
 

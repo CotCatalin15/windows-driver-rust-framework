@@ -1,8 +1,10 @@
 use core::num::NonZeroU32;
 
-use wdk_sys::{
-    ntddk::{KeInitializeSemaphore, KeReadStateSemaphore, KeReleaseSemaphore},
-    IO_NO_INCREMENT, KSEMAPHORE,
+use windows_sys::Wdk::{
+    Storage::FileSystem::IO_NO_INCREMENT,
+    System::SystemServices::{
+        KeInitializeSemaphore, KeReadStateSemaphore, KeReleaseSemaphore, KSEMAPHORE,
+    },
 };
 
 use crate::kmalloc::TaggedObject;
