@@ -23,6 +23,23 @@ use crate::minifilter::FltFilter;
 
 use super::{FltPort, FltPortCommunicationBuilder};
 
+pub trait FltCommunicationCallback {
+    type ClientCookie: 'static + Send;
+
+    fn on_connect(
+        &self,
+        client: &Arc<FltClient<Self::ClientCookie>>,
+        connection_buf: &[u8],
+    ) -> anyhow::Result<Option<Self::ClientCookie>>;
+    fn on_disconnect(&self, client: &FltClient<Self::ClientCookie>);
+    fn on_message(
+        &self,
+        client: &FltClient<Self::ClientCookie>,
+        input: &[u8],
+        output: &mut TrackedSlice,
+    ) -> anyhow::Result<()>;
+}
+
 pub struct FltClient<Cookie: 'static + Send> {
     filter: NonNull<_FLT_FILTER>,
     client: NonNull<_FLT_PORT>,
@@ -113,23 +130,6 @@ unsafe impl<Cookie: 'static + Send> Sync for FltClient<Cookie> {}
 enum FltCommunicationStorage<Cookie: 'static + Send> {
     SingleClient(Option<Arc<FltClient<Cookie>>>),
     MultiClient(),
-}
-
-pub trait FltCommunicationCallback {
-    type ClientCookie: 'static + Send;
-
-    fn on_connect(
-        &self,
-        client: &Arc<FltClient<Self::ClientCookie>>,
-        connection_buf: &[u8],
-    ) -> anyhow::Result<Option<Self::ClientCookie>>;
-    fn on_disconnect(&self, client: &FltClient<Self::ClientCookie>);
-    fn on_message(
-        &self,
-        cookie: Option<&Self::ClientCookie>,
-        input: &[u8],
-        output: &mut TrackedSlice,
-    ) -> anyhow::Result<()>;
 }
 
 struct FltClientCommunicationInner<CB>
@@ -304,11 +304,10 @@ unsafe extern "C" fn flt_comm_notify<CB: FltCommunicationCallback>(
 
     let mut tracked_output: TrackedSlice = TrackedSlice::new(output);
 
-    match server_cookie.callbacks.on_message(
-        client_cookie.get_cookie(),
-        &input,
-        &mut tracked_output,
-    ) {
+    match server_cookie
+        .callbacks
+        .on_message(client_cookie, &input, &mut tracked_output)
+    {
         Ok(_) => {
             *return_output_buffer_length = tracked_output.bytes_written() as _;
             STATUS_SUCCESS

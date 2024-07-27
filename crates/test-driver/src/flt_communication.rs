@@ -26,7 +26,7 @@ impl FltCommunicationCallback for FltCallbackImpl {
 
     fn on_message(
         &self,
-        cookie: Option<&Self::ClientCookie>,
+        cookie: &FltClient<Self::ClientCookie>,
         input: &[u8],
         output: &mut TrackedSlice,
     ) -> anyhow::Result<()> {
