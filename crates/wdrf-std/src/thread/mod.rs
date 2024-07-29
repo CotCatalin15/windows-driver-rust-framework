@@ -142,7 +142,7 @@ where
             leaked as _,
         );
 
-        if nt_success(status) {
+        if !nt_success(status) {
             let _ = Arc::from_raw_in(leaked, GlobalKernelAllocator::new_for_tagged::<Packet<T>>());
             Err(NtStatusError::Status(status))
         } else {

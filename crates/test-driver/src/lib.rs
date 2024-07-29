@@ -11,14 +11,19 @@ use wdk_sys::ntddk::KeBugCheckEx;
 use wdk_sys::NTSTATUS;
 use wdrf::context::{Context, ContextRegistry, FixedGlobalContextRegistry};
 use wdrf::minifilter::communication::client_communication::FltClientCommunication;
-use wdrf::minifilter::{FltFilter, FltRegistrationBuilder};
+use wdrf::minifilter::structs::IRP_MJ_OPERATION_END;
+use wdrf::minifilter::{FltFilter, FltOperationRegistrationSlice, FltRegistrationBuilder};
 use wdrf_std::constants::PoolFlags;
 use wdrf_std::dbg_break;
 use wdrf_std::kmalloc::{GlobalKernelAllocator, MemoryTag};
 use wdrf_std::sync::arc::{Arc, ArcExt};
-use wdrf_std::sys::event::EventType;
-use wdrf_std::thread::{spawn, this_thread};
 use windows_sys::Wdk::Foundation::DRIVER_OBJECT;
+use windows_sys::Wdk::Storage::FileSystem::Minifilters::{
+    FltGetRequestorProcessId, FLT_CALLBACK_DATA, FLT_OPERATION_REGISTRATION,
+    FLT_POSTOP_CALLBACK_STATUS, FLT_POSTOP_FINISHED_PROCESSING, FLT_PREOP_CALLBACK_STATUS,
+    FLT_PREOP_COMPLETE, FLT_RELATED_OBJECTS,
+};
+use windows_sys::Wdk::System::SystemServices::IRP_MJ_CREATE;
 use windows_sys::Win32::Foundation::{STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING};
 
 mod collector;
@@ -63,26 +68,44 @@ pub unsafe extern "system" fn driver_entry(
     }
 }
 
-use wdrf_std::sync::event::Event;
-use wdrf_std::sys::WaitableObject;
+unsafe extern "system" fn pre_op(
+    data: *mut FLT_CALLBACK_DATA,
+    fltobjects: *const FLT_RELATED_OBJECTS,
+    completioncontext: *mut *mut core::ffi::c_void,
+) -> FLT_PREOP_CALLBACK_STATUS {
+    dbg_break();
 
-pub fn test() -> anyhow::Result<()> {
-    let event = Event::try_create_arc(EventType::Notification, false)?;
+    //SimRepGetIoOpenDriverRegistryKey
+    FltGetRequestorProcessId(data);
 
-    let s_event = event.clone();
-    let th = spawn(move || {
-        this_thread::delay_execution(Duration::from_secs(10));
-        s_event.signal();
-        this_thread::delay_execution(Duration::from_secs(5));
-    })
-    .map_err(|_| anyhow::Error::msg("Failed to create thread"))?;
-
-    event.wait();
-
-    th.join();
-
-    Ok(())
+    FLT_PREOP_COMPLETE
 }
+
+unsafe extern "system" fn post_op(
+    data: *mut FLT_CALLBACK_DATA,
+    fltobjects: *const FLT_RELATED_OBJECTS,
+    completioncontext: *const core::ffi::c_void,
+    flags: u32,
+) -> FLT_POSTOP_CALLBACK_STATUS {
+    FLT_POSTOP_FINISHED_PROCESSING
+}
+
+static FLT_OPS: Option<FltOperationRegistrationSlice<2>> = FltOperationRegistrationSlice::new([
+    FLT_OPERATION_REGISTRATION {
+        MajorFunction: IRP_MJ_CREATE as _,
+        Flags: 0,
+        PreOperation: Some(pre_op),
+        PostOperation: Some(post_op),
+        Reserved1: core::ptr::null_mut(),
+    },
+    FLT_OPERATION_REGISTRATION {
+        MajorFunction: IRP_MJ_OPERATION_END as _,
+        Flags: 0,
+        PreOperation: None,
+        PostOperation: None,
+        Reserved1: core::ptr::null_mut(),
+    },
+]);
 
 fn driver_main(
     driver: &mut DRIVER_OBJECT,
@@ -97,10 +120,9 @@ fn driver_main(
 
     info!(name = "Driver entry", "Initializing driver");
 
-    test()?;
-
     let registration = FltRegistrationBuilder::new()
         .unload(Some(minifilter_unload))
+        .operations(FLT_OPS.as_ref().unwrap().get())
         .build()?;
     let filter = registration
         .register_filter(driver)
@@ -115,7 +137,6 @@ fn driver_main(
         filter,
         communication: comm,
     })?;
-
     let context = DRIVER_CONTEXT.get();
 
     unsafe {

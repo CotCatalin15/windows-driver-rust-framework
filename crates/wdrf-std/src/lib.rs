@@ -30,7 +30,7 @@ pub mod sys;
 
 #[inline(always)]
 pub fn nt_success(status: NTSTATUS) -> bool {
-    status > 0
+    status >= 0
 }
 
 #[derive(Error, Debug)]
