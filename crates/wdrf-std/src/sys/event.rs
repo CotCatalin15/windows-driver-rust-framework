@@ -1,7 +1,10 @@
-use wdk_sys::{
-    ntddk::{KeClearEvent, KeInitializeEvent, KePulseEvent, KeSetEvent},
-    IO_NO_INCREMENT, KEVENT,
-    _EVENT_TYPE::{NotificationEvent, SynchronizationEvent},
+use windows_sys::{
+    Wdk::{
+        Foundation::KEVENT,
+        Storage::FileSystem::IO_NO_INCREMENT,
+        System::SystemServices::{KeClearEvent, KeInitializeEvent, KePulseEvent, KeSetEvent},
+    },
+    Win32::System::Kernel::{NotificationEvent, SynchronizationEvent},
 };
 
 use crate::kmalloc::TaggedObject;

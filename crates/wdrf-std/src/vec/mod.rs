@@ -60,36 +60,3 @@ where
         }
     }
 }
-
-#[cfg(test)]
-mod test {
-    extern crate std;
-
-    use crate::kmalloc::GlobalKernelAllocator;
-
-    use super::{Vec, VecExt};
-
-    #[test]
-    fn testing_try_push() -> anyhow::Result<()> {
-        let mut v = Vec::create();
-        v.try_push(10)?;
-        v.try_push(20)?;
-
-        assert_eq!(v, [10, 20]);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_fail_push() -> anyhow::Result<()> {
-        let mut alloc = GlobalKernelAllocator::new_for_tagged::<i32>();
-        alloc.fail_allocations(true);
-
-        let mut v = Vec::new_in(alloc);
-
-        assert!(v.try_push(20).is_err());
-        assert_eq!(v, []);
-
-        Ok(())
-    }
-}

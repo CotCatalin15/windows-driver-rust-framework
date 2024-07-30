@@ -4,8 +4,10 @@
 
 use core::marker::ConstParamTy;
 
-use wdk_sys::{ntddk::KeGetCurrentIrql, APC_LEVEL, DISPATCH_LEVEL, PASSIVE_LEVEL};
 pub use wdrf_proc_macros::irql_check;
+use windows_sys::Wdk::System::SystemServices::{
+    KeGetCurrentIrql, APC_LEVEL, DISPATCH_LEVEL, PASSIVE_LEVEL,
+};
 
 #[derive(Clone, Copy, Debug, ConstParamTy, PartialEq, Eq)]
 pub enum IrqlCompare {

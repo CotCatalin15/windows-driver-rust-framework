@@ -1,6 +1,7 @@
-use wdk_sys::_PS_CREATE_NOTIFY_INFO;
 use wdrf::process::collector::{ProcessDescriptor, ProcessHook};
-use wdrf_std::{kmalloc::TaggedObject, traits::DispatchSafe};
+use wdrf_std::{kmalloc::TaggedObject, structs::PEPROCESS, traits::DispatchSafe};
+use windows_sys::Wdk::System::SystemServices::PS_CREATE_NOTIFY_INFO;
+use windows_sys::Win32::Foundation::HANDLE;
 
 pub struct TestProcessCollector {}
 
@@ -35,9 +36,9 @@ impl ProcessHook for TestProcessCollector {
 
     fn on_process_create(
         &mut self,
-        _process: wdk_sys::PEPROCESS,
-        process_id: wdk_sys::HANDLE,
-        _create_info: &_PS_CREATE_NOTIFY_INFO,
+        _process: PEPROCESS,
+        process_id: HANDLE,
+        _create_info: &PS_CREATE_NOTIFY_INFO,
     ) -> anyhow::Result<Self::Item> {
         Ok(ProcessItem::new(process_id as _))
     }

@@ -6,14 +6,18 @@ pub mod semaphore;
 
 use core::time::Duration;
 
-use wdk_sys::ntddk::KeWaitForMultipleObjects;
-use wdk_sys::{
-    ntddk::KeWaitForSingleObject,
-    LARGE_INTEGER, NTSTATUS, STATUS_ABANDONED_WAIT_0, STATUS_ABANDONED_WAIT_63,
-    STATUS_MUTANT_LIMIT_EXCEEDED, STATUS_SUCCESS, STATUS_TIMEOUT, STATUS_WAIT_0, STATUS_WAIT_63,
-    _KWAIT_REASON::Executive,
-    _MODE::KernelMode,
-    _WAIT_TYPE::{WaitAll, WaitAny},
+use windows_sys::{
+    Wdk::System::SystemServices::{
+        Executive, KeWaitForMultipleObjects, KeWaitForSingleObject, KernelMode,
+    },
+    Win32::{
+        Foundation::{
+            NTSTATUS, STATUS_ABANDONED_WAIT_0, STATUS_ABANDONED_WAIT_63,
+            STATUS_MUTANT_LIMIT_EXCEEDED, STATUS_SUCCESS, STATUS_TIMEOUT, STATUS_WAIT_0,
+            STATUS_WAIT_63,
+        },
+        System::Kernel::{WaitAll, WaitAny},
+    },
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -72,17 +76,11 @@ pub unsafe trait WaitableObject {
     #[cfg_attr(feature = "irql-check", irql_check(irql = APC_LELVEL))]
     fn wait_for(&self, duration: Duration) -> WaitResponse {
         unsafe {
-            let mut timeout: LARGE_INTEGER = core::mem::zeroed();
-            timeout.QuadPart = -((duration.as_nanos() / 100) as i64);
+            let timeout: i64 = -((duration.as_nanos() / 100) as i64);
 
             let ptr: *const WaitableKernelObject = self.kernel_object();
-            let status = KeWaitForSingleObject(
-                ptr as _,
-                Executive,
-                KernelMode as _,
-                false as _,
-                &mut timeout,
-            );
+            let status =
+                KeWaitForSingleObject(ptr.cast(), Executive, KernelMode as _, false as _, &timeout);
 
             WaitResponse::from_ntstatus(status)
         }
@@ -91,16 +89,11 @@ pub unsafe trait WaitableObject {
     #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
     fn wait_status(&self) -> WaitResponse {
         unsafe {
-            let mut timeout: LARGE_INTEGER = core::mem::zeroed();
+            let timeout: i64 = 0;
 
             let ptr: *const WaitableKernelObject = self.kernel_object();
-            let status = KeWaitForSingleObject(
-                ptr as _,
-                Executive,
-                KernelMode as _,
-                false as _,
-                &mut timeout,
-            );
+            let status =
+                KeWaitForSingleObject(ptr as _, Executive, KernelMode as _, false as _, &timeout);
 
             WaitResponse::from_ntstatus(status)
         }
@@ -158,8 +151,7 @@ unsafe impl<'a> WaitableObject for MultiWaitArray<'a> {
 
     fn wait_for(&self, duration: Duration) -> WaitResponse {
         unsafe {
-            let mut timeout: LARGE_INTEGER = core::mem::zeroed();
-            timeout.QuadPart = -((duration.as_nanos() / 100) as i64);
+            let timeout = -((duration.as_nanos() / 100) as i64);
 
             let array = self.wait_array.as_ptr();
 
@@ -170,7 +162,7 @@ unsafe impl<'a> WaitableObject for MultiWaitArray<'a> {
                 Executive,
                 KernelMode as _,
                 false as _,
-                &mut timeout,
+                &timeout,
                 core::ptr::null_mut(),
             );
 
@@ -180,8 +172,7 @@ unsafe impl<'a> WaitableObject for MultiWaitArray<'a> {
 
     fn wait_status(&self) -> WaitResponse {
         unsafe {
-            let mut timeout: LARGE_INTEGER = core::mem::zeroed();
-            timeout.QuadPart = 0;
+            let timeout = 0;
 
             let array = self.wait_array.as_ptr();
 
@@ -192,7 +183,7 @@ unsafe impl<'a> WaitableObject for MultiWaitArray<'a> {
                 Executive,
                 KernelMode as _,
                 false as _,
-                &mut timeout,
+                &timeout,
                 core::ptr::null_mut(),
             );
 

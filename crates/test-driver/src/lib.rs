@@ -1,44 +1,44 @@
 #![no_std]
 
 use core::panic::PanicInfo;
+use core::time::Duration;
 
 use flt_communication::{create_communication, FltCallbackImpl};
-use maple::consumer::{get_global_registry, set_global_consumer};
-use maple::{info, trace};
+use maple::consumer::get_global_registry;
 
-use nt_string::unicode_string::NtUnicodeStr;
-use wdk::{dbg_break, println};
-
-#[cfg(not(test))]
-use wdk_alloc::WDKAllocator;
-
-#[cfg(not(test))]
-#[global_allocator]
-static GLOBAL_ALLOCATOR: WDKAllocator = WDKAllocator;
-
-use wdk_sys::fltmgr::{FLT_FILTER_UNLOAD_FLAGS, PFLT_PORT};
-use wdk_sys::ntddk::KeDelayExecutionThread;
-use wdk_sys::_MODE::KernelMode;
-use wdk_sys::{
-    ntddk::KeBugCheckEx, DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING, STATUS_SUCCESS,
-    STATUS_UNSUCCESSFUL,
-};
-use wdk_sys::{LARGE_INTEGER, UNICODE_STRING};
+use maple::info;
+use wdk_sys::ntddk::KeBugCheckEx;
+use wdk_sys::NTSTATUS;
 use wdrf::context::{Context, ContextRegistry, FixedGlobalContextRegistry};
-use wdrf::logger::dbgprint::DbgPrintLogger;
 use wdrf::minifilter::communication::client_communication::FltClientCommunication;
-use wdrf::minifilter::{FltFilter, FltRegistrationBuilder};
-use wdrf_std::slice::slice_from_raw_parts_mut_or_empty;
+use wdrf::minifilter::structs::IRP_MJ_OPERATION_END;
+use wdrf::minifilter::{FltFilter, FltOperationRegistrationSlice, FltRegistrationBuilder};
+use wdrf_std::constants::PoolFlags;
+use wdrf_std::dbg_break;
+use wdrf_std::kmalloc::{GlobalKernelAllocator, MemoryTag};
 use wdrf_std::sync::arc::{Arc, ArcExt};
-use widestring::Utf16Str;
+use windows_sys::Wdk::Foundation::DRIVER_OBJECT;
+use windows_sys::Wdk::Storage::FileSystem::Minifilters::{
+    FltGetRequestorProcessId, FLT_CALLBACK_DATA, FLT_OPERATION_REGISTRATION,
+    FLT_POSTOP_CALLBACK_STATUS, FLT_POSTOP_FINISHED_PROCESSING, FLT_PREOP_CALLBACK_STATUS,
+    FLT_PREOP_COMPLETE, FLT_RELATED_OBJECTS,
+};
+use windows_sys::Wdk::System::SystemServices::IRP_MJ_CREATE;
+use windows_sys::Win32::Foundation::{STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING};
 
 mod collector;
 mod flt_communication;
 
+#[global_allocator]
+static KERNEL_GLOBAL_ALLOCATOR: GlobalKernelAllocator = GlobalKernelAllocator::new(
+    MemoryTag::new_from_bytes(b"allc"),
+    PoolFlags::POOL_FLAG_NON_PAGED,
+);
+
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     unsafe {
-        println!("[PANIC] called: {:#?}", info);
+        //println!("[PANIC] called: {:#?}", info);
         KeBugCheckEx(0x1234, 0, 0, 0, 0);
     }
 }
@@ -51,7 +51,6 @@ struct TestDriverContext {
 }
 
 static DRIVER_CONTEXT: Context<TestDriverContext> = Context::uninit();
-static LOGGER_CONTEXT: Context<DbgPrintLogger> = Context::uninit();
 
 ///# Safety
 ///
@@ -61,7 +60,7 @@ static LOGGER_CONTEXT: Context<DbgPrintLogger> = Context::uninit();
 #[export_name = "DriverEntry"] // WDF expects a symbol with the name DriverEntry
 pub unsafe extern "system" fn driver_entry(
     driver: &mut DRIVER_OBJECT,
-    registry_path: PCUNICODE_STRING,
+    registry_path: *const UNICODE_STRING,
 ) -> NTSTATUS {
     match driver_main(driver, &*registry_path) {
         Ok(_) => STATUS_SUCCESS,
@@ -69,10 +68,50 @@ pub unsafe extern "system" fn driver_entry(
     }
 }
 
+unsafe extern "system" fn pre_op(
+    data: *mut FLT_CALLBACK_DATA,
+    fltobjects: *const FLT_RELATED_OBJECTS,
+    completioncontext: *mut *mut core::ffi::c_void,
+) -> FLT_PREOP_CALLBACK_STATUS {
+    dbg_break();
+
+    //SimRepGetIoOpenDriverRegistryKey
+    FltGetRequestorProcessId(data);
+
+    FLT_PREOP_COMPLETE
+}
+
+unsafe extern "system" fn post_op(
+    data: *mut FLT_CALLBACK_DATA,
+    fltobjects: *const FLT_RELATED_OBJECTS,
+    completioncontext: *const core::ffi::c_void,
+    flags: u32,
+) -> FLT_POSTOP_CALLBACK_STATUS {
+    FLT_POSTOP_FINISHED_PROCESSING
+}
+
+static FLT_OPS: Option<FltOperationRegistrationSlice<2>> = FltOperationRegistrationSlice::new([
+    FLT_OPERATION_REGISTRATION {
+        MajorFunction: IRP_MJ_CREATE as _,
+        Flags: 0,
+        PreOperation: Some(pre_op),
+        PostOperation: Some(post_op),
+        Reserved1: core::ptr::null_mut(),
+    },
+    FLT_OPERATION_REGISTRATION {
+        MajorFunction: IRP_MJ_OPERATION_END as _,
+        Flags: 0,
+        PreOperation: None,
+        PostOperation: None,
+        Reserved1: core::ptr::null_mut(),
+    },
+]);
+
 fn driver_main(
     driver: &mut DRIVER_OBJECT,
     registry_path: &'static UNICODE_STRING,
 ) -> anyhow::Result<()> {
+    dbg_break();
     //let print_logge =
     //  DbgPrintLogger::new().map_err(|_| anyhow::Error::msg("Failed to create print logger"))?;
 
@@ -83,29 +122,34 @@ fn driver_main(
 
     let registration = FltRegistrationBuilder::new()
         .unload(Some(minifilter_unload))
+        .operations(FLT_OPS.as_ref().unwrap().get())
         .build()?;
-    let filter = registration.register_filter(driver)?;
+    let filter = registration
+        .register_filter(driver)
+        .map_err(|_| anyhow::Error::msg("Failed to register filter"))?;
+
     let filter = Arc::try_create(filter)?;
 
-    let comm = create_communication(filter.clone())?;
+    let comm = create_communication(filter.clone())
+        .map_err(|_| anyhow::Error::msg("Failed to create communication"))?;
 
     DRIVER_CONTEXT.init(&CONTEXT_REGISTRY, move || TestDriverContext {
         filter,
         communication: comm,
     })?;
-
     let context = DRIVER_CONTEXT.get();
 
     unsafe {
-        context.filter.start_filtering();
+        context
+            .filter
+            .start_filtering()
+            .map_err(|_| anyhow::Error::msg("Failed to start filtering"));
     }
 
     Ok(())
 }
 
-pub unsafe extern "C" fn minifilter_unload(_flags: FLT_FILTER_UNLOAD_FLAGS) -> NTSTATUS {
-    dbg_break();
-
+pub unsafe extern "system" fn minifilter_unload(_flags: u32) -> NTSTATUS {
     info!(name = "Unload", "Unloading callback called");
 
     get_global_registry().disable_consumer();

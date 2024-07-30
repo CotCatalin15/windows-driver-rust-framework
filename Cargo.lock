@@ -115,9 +115,9 @@ dependencies = [
 
 [[package]]
 name = "bitflags"
-version = "2.5.0"
+version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf4b9d6a944f767f8e5e0db018570623c85f3d925ac718db4e06d0187adb21c1"
+checksum = "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de"
 
 [[package]]
 name = "camino"
@@ -800,13 +800,12 @@ dependencies = [
  "anyhow",
  "maple",
  "nt-string",
- "wdk",
- "wdk-alloc",
  "wdk-build",
  "wdk-sys",
  "wdrf",
  "wdrf-std",
  "widestring",
+ "windows-sys",
 ]
 
 [[package]]
@@ -950,26 +949,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
-name = "wdk"
-version = "0.2.0"
-source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#cf59b0ca34daa10c5a33294e0445e0f142aab287"
-dependencies = [
- "wdk-build",
- "wdk-sys",
-]
-
-[[package]]
-name = "wdk-alloc"
-version = "0.2.0"
-source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#cf59b0ca34daa10c5a33294e0445e0f142aab287"
-dependencies = [
- "wdk-sys",
-]
-
-[[package]]
 name = "wdk-build"
 version = "0.2.0"
-source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#cf59b0ca34daa10c5a33294e0445e0f142aab287"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78da0616ae3b04f9488d250e8b087b7b332e7f1f18b4c7bcedebf7aea6231594"
 dependencies = [
  "bindgen",
  "cargo_metadata",
@@ -985,7 +968,8 @@ dependencies = [
 [[package]]
 name = "wdk-macros"
 version = "0.2.0"
-source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#cf59b0ca34daa10c5a33294e0445e0f142aab287"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65a27743e45f2bacdc8a778482a52ea2fda527bdac95bad5086cee080441b2da"
 dependencies = [
  "cfg-if",
  "proc-macro2",
@@ -996,7 +980,8 @@ dependencies = [
 [[package]]
 name = "wdk-sys"
 version = "0.2.0"
-source = "git+https://github.com/CotCatalin15/windows-drivers-rs?branch=features/minifilter-build#cf59b0ca34daa10c5a33294e0445e0f142aab287"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36c6fbc666a0535164ebbb16cff321ee2cac38636aa6b9f1712148388f401087"
 dependencies = [
  "anyhow",
  "bindgen",
@@ -1016,18 +1001,17 @@ dependencies = [
  "derive_builder",
  "maple",
  "nt-string",
- "wdk",
- "wdk-sys",
  "wdrf-std",
  "widestring",
+ "windows-sys",
 ]
 
 [[package]]
 name = "wdrf-macros"
 version = "0.1.0"
 dependencies = [
- "wdk-sys",
  "wdrf-proc-macros",
+ "windows-sys",
 ]
 
 [[package]]
@@ -1038,7 +1022,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "wdk-sys",
+ "windows-sys",
 ]
 
 [[package]]
@@ -1047,14 +1031,14 @@ version = "0.1.0"
 dependencies = [
  "allocator-api2",
  "anyhow",
+ "bitflags",
  "hashbrown",
  "nt-string",
  "sealed",
  "thiserror-core",
- "wdk",
- "wdk-sys",
  "wdrf-macros",
  "widestring",
+ "windows-sys",
 ]
 
 [[package]]
