@@ -4,6 +4,7 @@ use core::{
 };
 
 use crate::{
+    kmalloc::TaggedObject,
     sys,
     traits::{DispatchSafe, WriteLock},
 };
@@ -22,6 +23,16 @@ pub struct Mutex<T: ?Sized, L: WriteLock> {
 unsafe impl<T: ?Sized + Send, L: WriteLock> Send for Mutex<T, L> {}
 unsafe impl<T: ?Sized + Send, L: WriteLock> Sync for Mutex<T, L> {}
 unsafe impl<T: ?Sized + Send, L: WriteLock + DispatchSafe> DispatchSafe for Mutex<T, L> {}
+
+impl<T: ?Sized + Send + TaggedObject, L: WriteLock> TaggedObject for Mutex<T, L> {
+    fn tag() -> crate::kmalloc::MemoryTag {
+        T::tag()
+    }
+
+    fn flags() -> crate::constants::PoolFlags {
+        T::flags()
+    }
+}
 
 pub struct MutexGuard<'a, T: ?Sized, L: WriteLock> {
     lock: &'a Mutex<T, L>,
@@ -51,7 +62,7 @@ impl<T, L> Mutex<T, L>
 where
     L: WriteLock + Default,
 {
-    pub const fn new(data: T) -> Self {
+    pub fn new(data: T) -> Self {
         Self {
             inner: L::default(),
             data: UnsafeCell::new(data),
