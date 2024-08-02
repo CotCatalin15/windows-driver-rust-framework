@@ -51,7 +51,7 @@ impl<T, L> Mutex<T, L>
 where
     L: WriteLock + Default,
 {
-    pub const fn new(data: T) -> Self {
+    pub fn new(data: T) -> Self {
         Self {
             inner: L::default(),
             data: UnsafeCell::new(data),

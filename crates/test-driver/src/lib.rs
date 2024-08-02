@@ -73,11 +73,8 @@ unsafe extern "system" fn pre_op(
     fltobjects: *const FLT_RELATED_OBJECTS,
     completioncontext: *mut *mut core::ffi::c_void,
 ) -> FLT_PREOP_CALLBACK_STATUS {
-    dbg_break();
-
     //SimRepGetIoOpenDriverRegistryKey
     FltGetRequestorProcessId(data);
-
     FLT_PREOP_COMPLETE
 }
 
@@ -90,14 +87,15 @@ unsafe extern "system" fn post_op(
     FLT_POSTOP_FINISHED_PROCESSING
 }
 
-static FLT_OPS: Option<FltOperationRegistrationSlice<2>> = FltOperationRegistrationSlice::new([
-    FLT_OPERATION_REGISTRATION {
+static FLT_OPS: Option<FltOperationRegistrationSlice<1>> = FltOperationRegistrationSlice::new([
+    /*  FLT_OPERATION_REGISTRATION {
         MajorFunction: IRP_MJ_CREATE as _,
         Flags: 0,
         PreOperation: Some(pre_op),
         PostOperation: Some(post_op),
         Reserved1: core::ptr::null_mut(),
     },
+    */
     FLT_OPERATION_REGISTRATION {
         MajorFunction: IRP_MJ_OPERATION_END as _,
         Flags: 0,

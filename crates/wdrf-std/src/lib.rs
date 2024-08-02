@@ -1,8 +1,6 @@
 #![no_std]
-#![feature(error_in_core)]
 #![feature(allocator_api)]
 #![feature(negative_impls)]
-#![feature(effects)]
 #![feature(arbitrary_self_types)]
 #![feature(slice_ptr_get)]
 
