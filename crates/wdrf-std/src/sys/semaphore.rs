@@ -1,4 +1,4 @@
-use core::num::NonZeroU32;
+use core::{i32, num::NonZeroU32};
 
 use windows_sys::Wdk::{
     Storage::FileSystem::IO_NO_INCREMENT,
@@ -32,11 +32,15 @@ impl KeSemaphore {
         Self(unsafe { core::mem::zeroed() })
     }
 
-    pub fn init(&self, count: u32, limit: u32) {
+    pub fn init(&self, count: i32, limit: i32) {
         unsafe {
             let ptr: *const KSEMAPHORE = &self.0;
             KeInitializeSemaphore(ptr as _, count as _, limit as _);
         }
+    }
+
+    pub fn init_max(&self) {
+        self.init(0, i32::MAX);
     }
 
     pub fn release(&self, increment: NonZeroU32) {

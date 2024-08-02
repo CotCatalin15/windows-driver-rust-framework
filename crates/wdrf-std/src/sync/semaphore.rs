@@ -74,7 +74,7 @@ impl Semaphore {
             limit,
         })?;
 
-        arc_sem.inner.init(count, limit);
+        arc_sem.inner.init(count as _, limit as _);
 
         Ok(arc_sem)
     }
@@ -85,7 +85,7 @@ impl Semaphore {
             limit,
         })?;
 
-        box_sem.inner.init(count, limit);
+        box_sem.inner.init(count as _, limit as _);
 
         Ok(box_sem)
     }

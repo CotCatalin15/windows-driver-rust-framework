@@ -3,6 +3,7 @@
 #![feature(sync_unsafe_cell)]
 
 pub mod context;
+pub mod logger;
 pub mod process;
 
 #[cfg(feature = "minifilter")]

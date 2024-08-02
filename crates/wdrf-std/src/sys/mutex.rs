@@ -1,15 +1,12 @@
 use core::cell::UnsafeCell;
 
-#[cfg(feature = "irql-checks")]
-use wdrf_macros::irql_check;
-
 use windows_sys::Wdk::{
     Foundation::FAST_MUTEX,
     System::SystemServices::{
         ExAcquireSpinLockExclusive, ExAcquireSpinLockShared, ExReleaseSpinLockExclusive,
         ExReleaseSpinLockShared, KeAcquireGuardedMutex, KeAcquireInStackQueuedSpinLock,
         KeInitializeGuardedMutex, KeInitializeSpinLock, KeReleaseGuardedMutex,
-        KeReleaseInStackQueuedSpinLock, APC_LEVEL, KLOCK_QUEUE_HANDLE,
+        KeReleaseInStackQueuedSpinLock, KLOCK_QUEUE_HANDLE,
     },
 };
 
@@ -42,7 +39,7 @@ impl Default for GuardedMutex {
 
 impl WriteLock for GuardedMutex {
     ///Irql < APC_LEVEL
-    #[cfg_attr(feature = "irql-checks", irql_check(irql = APC_LEVEL))]
+    //#[cfg_attr(feature = "irql-checks", irql_check(irql = APC_LEVEL))]
     fn lock(&self) {
         unsafe {
             KeAcquireGuardedMutex(self.inner.get());
@@ -50,7 +47,7 @@ impl WriteLock for GuardedMutex {
     }
 
     ///Irql <= APC_LEVEL
-    #[cfg_attr(feature = "irql-checks", irql_check(irql = APC_LEVEL))]
+    //#[cfg_attr(feature = "irql-checks", irql_check(irql = APC_LEVEL))]
     fn unlock(&self) {
         unsafe {
             KeReleaseGuardedMutex(self.inner.get());
@@ -85,14 +82,12 @@ impl Default for SpinLock {
 }
 
 impl WriteLock for SpinLock {
-    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
     fn lock(&self) {
         unsafe {
             KeAcquireInStackQueuedSpinLock(self.inner.get(), self.lock_handle.get());
         }
     }
 
-    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL, compare = IrqlCompare::Eq))]
     fn unlock(&self) {
         unsafe {
             KeReleaseInStackQueuedSpinLock(self.lock_handle.get());
@@ -126,7 +121,7 @@ impl Default for ExSpinLock {
 }
 
 impl WriteLock for ExSpinLock {
-    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
+    //#[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
     fn lock(&self) {
         unsafe {
             let old_irql = ExAcquireSpinLockExclusive(self.inner.get());
@@ -134,7 +129,7 @@ impl WriteLock for ExSpinLock {
         }
     }
 
-    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL, compare = IrqlCompare::Eq))]
+    //#[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL, compare = IrqlCompare::Eq))]
     fn unlock(&self) {
         unsafe {
             ExReleaseSpinLockExclusive(self.inner.get(), *self.old_irql.get());
@@ -143,7 +138,7 @@ impl WriteLock for ExSpinLock {
 }
 
 impl ReadLock for ExSpinLock {
-    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
+    //#[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
     fn lock_shared(&self) {
         unsafe {
             let old_irql = ExAcquireSpinLockShared(self.inner.get());
@@ -151,7 +146,7 @@ impl ReadLock for ExSpinLock {
         }
     }
 
-    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL, compare = IrqlCompare::Eq))]
+    //#[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL, compare = IrqlCompare::Eq))]
     fn unlock_shared(&self) {
         unsafe {
             ExReleaseSpinLockShared(self.inner.get(), *self.old_irql.get());

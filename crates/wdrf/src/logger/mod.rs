@@ -20,7 +20,11 @@ use wdrf_std::{
     thread::{spawn, JoinHandle},
     vec::{Vec, VecCreate, VecExt},
 };
-use windows_sys::Wdk::System::SystemServices::DbgPrint;
+
+#[link(name = "ntoskrnl")]
+extern "C" {
+    fn DbgPrint(format: *const u8, ...);
+}
 
 const VEC_U8_TAG: MemoryTag = MemoryTag::new_from_bytes(b"logv");
 
@@ -121,13 +125,13 @@ impl DbgPrintLogger {
         ));
 
         loop {
+            if logger.stop.load(Ordering::Relaxed) {
+                break;
+            }
+
             let status = logger.log_event.wait();
             if status != WaitResponse::Success {
                 panic!("AAA");
-            }
-
-            if logger.stop.load(Ordering::Relaxed) {
-                break;
             }
 
             {
@@ -144,6 +148,15 @@ impl DbgPrintLogger {
 
             event_buffer.clear();
         }
+    }
+}
+
+impl Drop for DbgPrintLogger {
+    fn drop(&mut self) {
+        let guard = self.inner.pending_events.lock();
+
+        self.inner.stop.store(true, Ordering::SeqCst);
+        self.inner.log_event.signal();
     }
 }
 
@@ -171,6 +184,7 @@ impl EventConsumer for DbgPrintLogger {
                 meta.name.unwrap_or(""),
                 args
             ));
+            self.log_event(writable);
         }
     }
 }

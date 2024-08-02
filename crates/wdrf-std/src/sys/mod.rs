@@ -56,7 +56,7 @@ pub struct WaitableKernelObject;
 pub unsafe trait WaitableObject {
     fn kernel_object(&self) -> &WaitableKernelObject;
 
-    #[cfg_attr(feature = "irql-check", irql_check(irql = APC_LELVEL))]
+    //#[cfg_attr(feature = "irql-check", irql_check(irql = APC_LELVEL))]
     fn wait(&self) -> WaitResponse {
         unsafe {
             let ptr: *const WaitableKernelObject = self.kernel_object();
@@ -73,7 +73,7 @@ pub unsafe trait WaitableObject {
         }
     }
 
-    #[cfg_attr(feature = "irql-check", irql_check(irql = APC_LELVEL))]
+    //#[cfg_attr(feature = "irql-check", irql_check(irql = APC_LELVEL))]
     fn wait_for(&self, duration: Duration) -> WaitResponse {
         unsafe {
             let timeout: i64 = -((duration.as_nanos() / 100) as i64);
@@ -86,7 +86,7 @@ pub unsafe trait WaitableObject {
         }
     }
 
-    #[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
+    //#[cfg_attr(feature = "irql-check", irql_check(irql = DISPATCH_LEVEL))]
     fn wait_status(&self) -> WaitResponse {
         unsafe {
             let timeout: i64 = 0;

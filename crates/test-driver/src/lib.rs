@@ -1,15 +1,15 @@
 #![no_std]
 
 use core::panic::PanicInfo;
-use core::time::Duration;
 
 use flt_communication::{create_communication, FltCallbackImpl};
-use maple::consumer::get_global_registry;
+use maple::consumer::{get_global_registry, set_global_consumer};
 
 use maple::info;
 use wdk_sys::ntddk::KeBugCheckEx;
 use wdk_sys::NTSTATUS;
 use wdrf::context::{Context, ContextRegistry, FixedGlobalContextRegistry};
+use wdrf::logger::DbgPrintLogger;
 use wdrf::minifilter::communication::client_communication::FltClientCommunication;
 use wdrf::minifilter::structs::IRP_MJ_OPERATION_END;
 use wdrf::minifilter::{FltFilter, FltOperationRegistrationSlice, FltRegistrationBuilder};
@@ -105,16 +105,28 @@ static FLT_OPS: Option<FltOperationRegistrationSlice<1>> = FltOperationRegistrat
     },
 ]);
 
+static LOGGER_CONTEXT: Context<DbgPrintLogger> = Context::uninit();
+
+fn init_logger() {
+    let logger = DbgPrintLogger::new();
+    if logger.is_err() {
+        return;
+    }
+
+    let logger = logger.unwrap();
+
+    LOGGER_CONTEXT.init(&CONTEXT_REGISTRY, move || logger);
+
+    set_global_consumer(LOGGER_CONTEXT.get());
+}
+
 fn driver_main(
     driver: &mut DRIVER_OBJECT,
     registry_path: &'static UNICODE_STRING,
 ) -> anyhow::Result<()> {
     dbg_break();
-    //let print_logge =
-    //  DbgPrintLogger::new().map_err(|_| anyhow::Error::msg("Failed to create print logger"))?;
 
-    //LOGGER_CONTEXT.init(&CONTEXT_REGISTRY, move || print_logge)?;
-    //set_global_consumer(LOGGER_CONTEXT.get());
+    init_logger();
 
     info!(name = "Driver entry", "Initializing driver");
 
