@@ -5,6 +5,7 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+use allocator::LoggerAllocator;
 use maple::consumer::EventConsumer;
 use wdrf_std::{
     constants::PoolFlags,
@@ -21,6 +22,8 @@ use wdrf_std::{
     vec::{Vec, VecCreate, VecExt},
 };
 
+mod allocator;
+
 #[link(name = "ntoskrnl")]
 extern "C" {
     fn DbgPrint(format: *const u8, ...);
@@ -32,6 +35,7 @@ struct LoggerInner {
     log_event: KeEvent,
     pending_events: SpinMutex<Vec<Vec<u8>>>,
     stop: AtomicBool,
+    allocator: LoggerAllocator,
 }
 
 unsafe impl Send for LoggerInner {}
@@ -45,24 +49,22 @@ impl TaggedObject for LoggerInner {
 
 pub struct DbgPrintLogger {
     inner: Arc<LoggerInner>,
+    #[allow(dead_code)]
     log_thread: JoinHandle<()>,
 }
 
-pub struct DbgWrittable {
+pub struct DbgWritable {
     offset: usize,
     buffer: Vec<u8>,
 }
 
-impl DbgWrittable {
-    pub fn try_create() -> anyhow::Result<Self> {
-        let mut buffer = Vec::create();
-        buffer.try_resize(512, 0 as u8)?;
-
-        Ok(Self { offset: 0, buffer })
+impl DbgWritable {
+    pub fn create(buffer: Vec<u8>) -> Self {
+        Self { offset: 0, buffer }
     }
 }
 
-impl core::fmt::Write for DbgWrittable {
+impl core::fmt::Write for DbgWritable {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         if self.offset + s.len() + 1 >= self.buffer.len() {
             //for 0 terminated string
@@ -89,6 +91,7 @@ impl DbgPrintLogger {
             log_event: unsafe { KeEvent::new() },
             pending_events: SpinMutex::new(buffer),
             stop: AtomicBool::new(false),
+            allocator: LoggerAllocator::new(512),
         };
 
         let inner = Arc::try_create(inner)?;
@@ -104,7 +107,7 @@ impl DbgPrintLogger {
         })
     }
 
-    pub fn log_event(&self, writtable: DbgWrittable) {
+    pub fn log_event(&self, writtable: DbgWritable) {
         {
             let mut guard = self.inner.pending_events.lock();
 
@@ -146,7 +149,9 @@ impl DbgPrintLogger {
                 }
             }
 
-            event_buffer.clear();
+            while let Some(buffer) = event_buffer.pop() {
+                logger.allocator.free_allocation(buffer);
+            }
         }
     }
 }
@@ -172,19 +177,25 @@ impl EventConsumer for DbgPrintLogger {
     }
 
     fn event(&self, event: &maple::fields::Event) {
-        if let Ok(mut writable) = DbgWrittable::try_create() {
-            let meta = event.meta();
-            let args = event.args();
-
-            let _ = writable.write_fmt(format_args!(
-                "[{}:{}:{}][{}] {:#?}\n\0",
-                meta.module,
-                meta.file,
-                meta.line,
-                meta.name.unwrap_or(""),
-                args
-            ));
-            self.log_event(writable);
+        let buffer = self.inner.allocator.try_allocate();
+        if buffer.is_err() {
+            return;
         }
+
+        let buffer = buffer.unwrap();
+        let mut writable = DbgWritable::create(buffer);
+
+        let meta = event.meta();
+        let args = event.args();
+
+        let _ = writable.write_fmt(format_args!(
+            "[{}:{}:{}][{}] {:#?}\n\0",
+            meta.module,
+            meta.file,
+            meta.line,
+            meta.name.unwrap_or(""),
+            args
+        ));
+        self.log_event(writable);
     }
 }
