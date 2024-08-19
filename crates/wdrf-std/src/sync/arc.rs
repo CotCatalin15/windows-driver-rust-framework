@@ -9,7 +9,7 @@ use crate::{
 pub type Arc<T, A: Allocator = GlobalKernelAllocator> = alloc::sync::Arc<T, A>;
 
 #[allow(type_alias_bounds)]
-pub type Weak<T: TaggedObject, A: Allocator = GlobalKernelAllocator> = alloc::sync::Weak<T, A>;
+pub type Weak<T, A: Allocator = GlobalKernelAllocator> = alloc::sync::Weak<T, A>;
 
 unsafe impl<T: DispatchSafe, A: Allocator> DispatchSafe for Arc<T, A> {}
 unsafe impl<T: DispatchSafe, A: Allocator> DispatchSafe for Weak<T, A> {}

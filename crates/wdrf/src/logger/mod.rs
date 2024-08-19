@@ -19,7 +19,7 @@ use wdrf_std::{
         WaitResponse, WaitableObject,
     },
     thread::{spawn, JoinHandle},
-    vec::{Vec, VecCreate, VecExt},
+    vec::{Vec, VecExt},
 };
 
 mod allocator;
@@ -158,7 +158,7 @@ impl DbgPrintLogger {
 
 impl Drop for DbgPrintLogger {
     fn drop(&mut self) {
-        let guard = self.inner.pending_events.lock();
+        let _guard = self.inner.pending_events.lock();
 
         self.inner.stop.store(true, Ordering::SeqCst);
         self.inner.log_event.signal();

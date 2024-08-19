@@ -7,19 +7,27 @@ pub mod structs;
 use core::mem::MaybeUninit;
 
 use structs::IRP_MJ_OPERATION_END;
-use wdrf_std::{kmalloc::TaggedObject, nt_success, NtResult, NtResultEx};
-use windows_sys::Wdk::{
-    Foundation::DRIVER_OBJECT,
-    Storage::FileSystem::Minifilters::{
-        FltRegisterFilter, FltStartFiltering, FltUnregisterFilter, FLT_CONTEXT_END,
-        FLT_CONTEXT_REGISTRATION, FLT_OPERATION_REGISTRATION, FLT_REGISTRATION,
-        FLT_REGISTRATION_VERSION, PFLT_FILTER, PFLT_FILTER_UNLOAD_CALLBACK,
-        PFLT_GENERATE_FILE_NAME, PFLT_INSTANCE_QUERY_TEARDOWN_CALLBACK,
-        PFLT_INSTANCE_SETUP_CALLBACK, PFLT_INSTANCE_TEARDOWN_CALLBACK,
-        PFLT_NORMALIZE_CONTEXT_CLEANUP, PFLT_NORMALIZE_NAME_COMPONENT,
-        PFLT_NORMALIZE_NAME_COMPONENT_EX, PFLT_SECTION_CONFLICT_NOTIFICATION_CALLBACK,
-        PFLT_TRANSACTION_NOTIFICATION_CALLBACK,
+use wdrf_std::{
+    kmalloc::TaggedObject,
+    nt_success,
+    sync::arc::{Arc, ArcExt},
+    NtResult, NtResultEx, NtStatusError,
+};
+use windows_sys::{
+    Wdk::{
+        Foundation::DRIVER_OBJECT,
+        Storage::FileSystem::Minifilters::{
+            FltRegisterFilter, FltStartFiltering, FltUnregisterFilter, FLT_CONTEXT_END,
+            FLT_CONTEXT_REGISTRATION, FLT_OPERATION_REGISTRATION, FLT_REGISTRATION,
+            FLT_REGISTRATION_VERSION, PFLT_FILTER, PFLT_FILTER_UNLOAD_CALLBACK,
+            PFLT_GENERATE_FILE_NAME, PFLT_INSTANCE_QUERY_TEARDOWN_CALLBACK,
+            PFLT_INSTANCE_SETUP_CALLBACK, PFLT_INSTANCE_TEARDOWN_CALLBACK,
+            PFLT_NORMALIZE_CONTEXT_CLEANUP, PFLT_NORMALIZE_NAME_COMPONENT,
+            PFLT_NORMALIZE_NAME_COMPONENT_EX, PFLT_SECTION_CONFLICT_NOTIFICATION_CALLBACK,
+            PFLT_TRANSACTION_NOTIFICATION_CALLBACK,
+        },
     },
+    Win32::Foundation::STATUS_NO_MEMORY,
 };
 
 pub struct FltRegistration(FLT_REGISTRATION);
@@ -32,24 +40,30 @@ pub struct FltOperationRegistrationSlice<const SIZE: usize> {
     inner: [FLT_OPERATION_REGISTRATION; SIZE],
 }
 
-pub struct FltFilter(PFLT_FILTER);
+struct FltFilterInner(PFLT_FILTER);
+
+#[derive(Clone)]
+pub struct FltFilter {
+    inner: Arc<FltFilterInner>,
+}
 
 unsafe impl Send for FltFilter {}
 unsafe impl Sync for FltFilter {}
 
-impl TaggedObject for FltFilter {
+impl TaggedObject for FltFilterInner {
     fn tag() -> wdrf_std::kmalloc::MemoryTag {
         wdrf_std::kmalloc::MemoryTag::new_from_bytes(b"fltf")
     }
 }
 
 impl FltFilter {
-    pub fn new(filter: isize) -> Self {
-        Self(filter)
+    pub fn try_create(filter: isize) -> anyhow::Result<Self> {
+        let inner = Arc::try_create(FltFilterInner(filter))?;
+        Ok(Self { inner })
     }
 
     pub fn as_handle(&self) -> isize {
-        self.0
+        self.inner.0
     }
 
     ///
@@ -58,7 +72,7 @@ impl FltFilter {
     /// Should only be called once
     ///
     pub unsafe fn start_filtering(&self) -> anyhow::Result<()> {
-        let status = FltStartFiltering(self.0);
+        let status = FltStartFiltering(self.inner.0);
         if nt_success(status) {
             Ok(())
         } else {
@@ -67,7 +81,7 @@ impl FltFilter {
     }
 }
 
-impl Drop for FltFilter {
+impl Drop for FltFilterInner {
     fn drop(&mut self) {
         unsafe {
             FltUnregisterFilter(self.0);
@@ -260,6 +274,8 @@ impl FltRegistration {
         let mut filter = 0;
         let status = unsafe { FltRegisterFilter(driver as _, &self.0, &mut filter) };
 
-        NtResult::from_status(status, || FltFilter(filter))
+        let _ = NtResult::from_status(status, || ())?;
+
+        FltFilter::try_create(filter).map_err(|_| NtStatusError::Status(STATUS_NO_MEMORY))
     }
 }
