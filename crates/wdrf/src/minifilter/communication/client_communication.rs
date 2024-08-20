@@ -184,6 +184,7 @@ unsafe extern "system" fn flt_comm_disconnect<CB: FltCommunicationCallback>(
     let cookie: *mut CommunicationInner<CB> = client_cookie as *mut CommunicationInner<CB>;
     let cookie = &mut *cookie;
 
+    cookie.callbacks.disconnect();
     cookie.client.disconnect();
 }
 
