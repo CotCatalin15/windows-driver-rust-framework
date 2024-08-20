@@ -4,10 +4,7 @@ use core::{num::NonZeroU32, ptr::NonNull};
 
 use nt_string::unicode_string::NtUnicodeStr;
 
-use wdrf_std::{
-    kmalloc::TaggedObject, object::attribute::ObjectAttributes, sync::arc::Arc, NtResult,
-    NtResultEx,
-};
+use wdrf_std::{kmalloc::TaggedObject, object::attribute::ObjectAttributes, NtResult, NtResultEx};
 use windows_sys::{
     Wdk::{
         Foundation::OBJECT_ATTRIBUTES,
@@ -22,7 +19,8 @@ use windows_sys::{
 use super::{security_descriptor::FltSecurityDescriptor, FltFilter};
 
 pub struct FltPort {
-    filter: Arc<FltFilter>,
+    #[allow(dead_code)]
+    filter: FltFilter,
     port: PFLT_PORT,
     max_clients: u32,
 }
@@ -37,7 +35,7 @@ impl TaggedObject for FltPort {
 }
 
 pub struct FltPortCommunicationBuilder<'a> {
-    filter: Arc<FltFilter>,
+    filter: FltFilter,
     name: NtUnicodeStr<'a>,
     cookie: Option<NonNull<()>>,
     connect: PFLT_CONNECT_NOTIFY,
@@ -47,7 +45,7 @@ pub struct FltPortCommunicationBuilder<'a> {
 }
 
 impl<'a> FltPortCommunicationBuilder<'a> {
-    pub fn new(filter: Arc<FltFilter>, name: NtUnicodeStr<'a>) -> Self {
+    pub fn new(filter: FltFilter, name: NtUnicodeStr<'a>) -> Self {
         Self {
             filter,
             name,
@@ -119,7 +117,7 @@ impl<'a> FltPortCommunicationBuilder<'a> {
 }
 
 impl FltPort {
-    fn new(filter: Arc<FltFilter>, port: isize, max_clients: u32) -> Self {
+    fn new(filter: FltFilter, port: isize, max_clients: u32) -> Self {
         Self {
             filter,
             port,

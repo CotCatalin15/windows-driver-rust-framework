@@ -46,7 +46,7 @@ fn panic(info: &PanicInfo) -> ! {
 static CONTEXT_REGISTRY: FixedGlobalContextRegistry<10> = FixedGlobalContextRegistry::new();
 
 struct TestDriverContext {
-    filter: Arc<FltFilter>,
+    filter: FltFilter,
     communication: FltClientCommunication<FltCallbackImpl>,
 }
 
@@ -115,7 +115,9 @@ fn init_logger() {
 
     let logger = logger.unwrap();
 
-    LOGGER_CONTEXT.init(&CONTEXT_REGISTRY, move || logger);
+    LOGGER_CONTEXT
+        .init(&CONTEXT_REGISTRY, move || logger)
+        .expect("Failed to init logger");
 
     set_global_consumer(LOGGER_CONTEXT.get());
 }
@@ -138,8 +140,6 @@ fn driver_main(
         .register_filter(driver)
         .map_err(|_| anyhow::Error::msg("Failed to register filter"))?;
 
-    let filter = Arc::try_create(filter)?;
-
     let comm = create_communication(filter.clone())
         .map_err(|_| anyhow::Error::msg("Failed to create communication"))?;
 
@@ -153,7 +153,7 @@ fn driver_main(
         context
             .filter
             .start_filtering()
-            .map_err(|_| anyhow::Error::msg("Failed to start filtering"));
+            .map_err(|_| anyhow::Error::msg("Failed to start filtering"))?;
     }
 
     Ok(())
