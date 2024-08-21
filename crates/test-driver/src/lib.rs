@@ -6,8 +6,6 @@ use flt_communication::{create_communication, FltCallbackImpl};
 use maple::consumer::{get_global_registry, set_global_consumer};
 
 use maple::info;
-use wdk_sys::ntddk::KeBugCheckEx;
-use wdk_sys::NTSTATUS;
 use wdrf::context::{Context, ContextRegistry, FixedGlobalContextRegistry};
 use wdrf::logger::DbgPrintLogger;
 use wdrf::minifilter::communication::client_communication::FltClientCommunication;
@@ -23,8 +21,10 @@ use windows_sys::Wdk::Storage::FileSystem::Minifilters::{
     FLT_POSTOP_CALLBACK_STATUS, FLT_POSTOP_FINISHED_PROCESSING, FLT_PREOP_CALLBACK_STATUS,
     FLT_PREOP_COMPLETE, FLT_RELATED_OBJECTS,
 };
-use windows_sys::Wdk::System::SystemServices::IRP_MJ_CREATE;
-use windows_sys::Win32::Foundation::{STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING};
+use windows_sys::Wdk::System::SystemServices::{KeBugCheckEx, IRP_MJ_CREATE};
+use windows_sys::Win32::Foundation::{
+    NTSTATUS, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING,
+};
 
 mod collector;
 mod flt_communication;
@@ -41,6 +41,8 @@ fn panic(info: &PanicInfo) -> ! {
         //println!("[PANIC] called: {:#?}", info);
         KeBugCheckEx(0x1234, 0, 0, 0, 0);
     }
+
+    loop {}
 }
 
 static CONTEXT_REGISTRY: FixedGlobalContextRegistry<10> = FixedGlobalContextRegistry::new();
