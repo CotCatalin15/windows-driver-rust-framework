@@ -15,8 +15,7 @@ maple.workspace = true
 nt-string.workspace = true
 
 [build-dependencies]
-wdk-build = { version = "0.2.0" }
-
+wdk-build = { git = "https://github.com/microsoft/windows-drivers-rs", version = "0.2.0" }
 
 [lib]
 crate-type = ["cdylib"]
