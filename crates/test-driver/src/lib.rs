@@ -40,6 +40,7 @@ fn panic(info: &PanicInfo) -> ! {
     unsafe {
         //println!("[PANIC] called: {:#?}", info);
         KeBugCheckEx(0x1234, 0, 0, 0, 0);
+        loop {}
     }
 
     loop {}
@@ -53,6 +54,9 @@ struct TestDriverContext {
 }
 
 static DRIVER_CONTEXT: Context<TestDriverContext> = Context::uninit();
+
+//#[no_mangle]
+//static WdfMinimumVersionRequired: u32 = 33;
 
 ///# Safety
 ///
