@@ -1,6 +1,6 @@
 //Single client communication
 
-use core::{num::NonZeroU32, ptr::NonNull};
+use core::{num::NonZeroU32, ops::Deref, ptr::NonNull};
 
 use nt_string::unicode_string::NtUnicodeStr;
 use wdrf_std::{
@@ -143,6 +143,17 @@ where
 
     pub fn send_message(&self, input: &[u8], reply: Option<&mut TrackedSlice>) -> NtResult<()> {
         self.inner.client.send_message(input, reply)
+    }
+}
+
+impl<CB> Deref for FltClientCommunication<CB>
+where
+    CB: FltCommunicationCallback,
+{
+    type Target = CB;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner.callbacks
     }
 }
 
