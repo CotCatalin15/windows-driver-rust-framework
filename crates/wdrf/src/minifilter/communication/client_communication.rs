@@ -8,7 +8,7 @@ use wdrf_std::{
     kmalloc::TaggedObject,
     slice::{
         slice_from_raw_parts_mut_or_empty, slice_from_raw_parts_or_empty,
-        tracked_slice::TrackedSlice,
+        tracked_slice::{SeekFrom, TrackedSlice},
     },
     NtResult, NtResultEx, NtStatusError,
 };
@@ -72,7 +72,7 @@ impl FltClient {
                 }
 
                 let mut reply_size: u32 = tracked.remaining() as u32;
-                FltSendMessage(
+                let status = FltSendMessage(
                     self.filter.as_handle(),
                     &self.port,
                     input.as_ptr() as _,
@@ -80,7 +80,9 @@ impl FltClient {
                     tracked.as_slice_mut().as_mut_ptr().cast(),
                     &mut reply_size,
                     core::ptr::null(),
-                )
+                );
+                tracked.seek(SeekFrom::Start(reply_size as _));
+                status
             } else {
                 FltSendMessage(
                     self.filter.as_handle(),
