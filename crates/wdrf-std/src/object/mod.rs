@@ -4,7 +4,7 @@ pub mod handle;
 use handle::Handle;
 use windows_sys::Wdk::Foundation::POBJECT_TYPE;
 use windows_sys::Wdk::System::SystemServices::{
-    KernelMode, ObReferenceObjectByHandle, ObfDereferenceObject, ObfReferenceObject,
+    KernelMode, ObReferenceObjectByHandle, ObfDereferenceObject, ObfReferenceObject, UserMode,
 };
 use windows_sys::Win32::Foundation::{HANDLE, STATUS_OBJECT_TYPE_MISMATCH};
 
@@ -97,6 +97,34 @@ where
                 access,
                 T::object_type().into_kernel_object_type(),
                 KernelMode as _,
+                &mut obj_ptr,
+                core::ptr::null_mut(),
+            );
+
+            let non_null = NonNull::new(obj_ptr);
+
+            if let Some(obj) = non_null {
+                NtResult::from_status(status, || Self { obj: obj.cast() })
+            } else {
+                Err(NtStatusError::Status(STATUS_OBJECT_TYPE_MISMATCH))
+            }
+        }
+    }
+
+    ///
+    /// # Safety
+    ///
+    /// Must be a valid handle and access rights
+    ///
+    pub unsafe fn from_raw_user_handle(raw_handle: HANDLE, access: u32) -> NtResult<Self> {
+        unsafe {
+            let mut obj_ptr = core::ptr::null_mut();
+
+            let status = ObReferenceObjectByHandle(
+                raw_handle,
+                access,
+                T::object_type().into_kernel_object_type(),
+                UserMode as _,
                 &mut obj_ptr,
                 core::ptr::null_mut(),
             );
