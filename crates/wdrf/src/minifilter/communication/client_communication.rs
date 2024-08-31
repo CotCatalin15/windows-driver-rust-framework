@@ -8,7 +8,7 @@ use wdrf_std::{
     kmalloc::TaggedObject,
     slice::{
         slice_from_raw_parts_mut_or_empty, slice_from_raw_parts_or_empty,
-        tracked_slice::{SeekFrom, TrackedSlice},
+        tracked_slice::TrackedSlice,
     },
     NtResult, NtResultEx, NtStatusError,
 };
@@ -64,39 +64,41 @@ impl FltClient {
         self.port = 0;
     }
 
-    pub fn send_message(&self, input: &[u8], reply: Option<&mut TrackedSlice>) -> NtResult<()> {
-        let status = unsafe {
-            if let Some(tracked) = reply {
-                if tracked.bytes_written() > 0 {
-                    panic!("Not supported")
-                }
+    pub fn send_message(&self, input: &[u8]) -> NtResult<()> {
+        unsafe {
+            let status = FltSendMessage(
+                self.filter.as_handle(),
+                &self.port,
+                input.as_ptr() as _,
+                input.len() as _,
+                core::ptr::null_mut(),
+                core::ptr::null_mut(),
+                core::ptr::null(),
+            );
 
-                let mut reply_size: u32 = tracked.remaining() as u32;
-                let status = FltSendMessage(
-                    self.filter.as_handle(),
-                    &self.port,
-                    input.as_ptr() as _,
-                    input.len() as _,
-                    tracked.as_slice_mut().as_mut_ptr().cast(),
-                    &mut reply_size,
-                    core::ptr::null(),
-                );
-                tracked.seek(SeekFrom::Start(reply_size as _));
-                status
-            } else {
-                FltSendMessage(
-                    self.filter.as_handle(),
-                    &self.port,
-                    input.as_ptr() as _,
-                    input.len() as _,
-                    core::ptr::null_mut(),
-                    core::ptr::null_mut(),
-                    core::ptr::null(),
-                )
-            }
-        };
+            NtResult::from_status(status, || {})
+        }
+    }
 
-        NtResult::from_status(status, || ())
+    pub fn send_message_with_reply<'a>(
+        &self,
+        input: &[u8],
+        reply: &'a mut [u8],
+    ) -> NtResult<&'a [u8]> {
+        unsafe {
+            let mut reply_size: u32 = reply.len() as u32;
+            let status = FltSendMessage(
+                self.filter.as_handle(),
+                &self.port,
+                input.as_ptr() as _,
+                input.len() as _,
+                reply.as_ptr() as _,
+                &mut reply_size,
+                core::ptr::null(),
+            );
+            let reply_size: usize = reply_size as _;
+            NtResult::from_status(status, || (&reply[..reply_size]))
+        }
     }
 }
 
@@ -143,8 +145,16 @@ where
         Ok(Self { inner })
     }
 
-    pub fn send_message(&self, input: &[u8], reply: Option<&mut TrackedSlice>) -> NtResult<()> {
-        self.inner.client.send_message(input, reply)
+    pub fn send_message(&self, input: &[u8]) -> NtResult<()> {
+        self.inner.client.send_message(input)
+    }
+
+    pub fn send_message_with_reply<'a>(
+        &self,
+        input: &[u8],
+        reply: &'a mut [u8],
+    ) -> NtResult<&'a [u8]> {
+        self.inner.client.send_message_with_reply(input, reply)
     }
 }
 
