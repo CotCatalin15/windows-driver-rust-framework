@@ -11,6 +11,7 @@ use windows_sys::Win32::Foundation::NTSTATUS;
 extern crate alloc;
 
 pub mod boxed;
+pub mod collections;
 pub mod constants;
 pub mod fmt;
 pub mod hashbrown;
