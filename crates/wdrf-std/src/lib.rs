@@ -22,6 +22,7 @@ pub mod slice;
 pub mod structs;
 pub mod sync;
 pub mod thread;
+pub mod time;
 pub mod traits;
 pub mod vec;
 

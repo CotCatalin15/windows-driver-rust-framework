@@ -10,6 +10,7 @@ use wdrf_std::{
         slice_from_raw_parts_mut_or_empty, slice_from_raw_parts_or_empty,
         tracked_slice::TrackedSlice,
     },
+    time::Timeout,
     NtResult, NtResultEx, NtStatusError,
 };
 use windows_sys::{
@@ -84,6 +85,7 @@ impl FltClient {
         &self,
         input: &[u8],
         reply: &'a mut [u8],
+        timeout: Timeout,
     ) -> NtResult<&'a [u8]> {
         unsafe {
             let mut reply_size: u32 = reply.len() as u32;
@@ -94,7 +96,7 @@ impl FltClient {
                 input.len() as _,
                 reply.as_ptr() as _,
                 &mut reply_size,
-                core::ptr::null(),
+                timeout.as_ptr(),
             );
             let reply_size: usize = reply_size as _;
             NtResult::from_status(status, || (&reply[..reply_size]))
@@ -153,8 +155,11 @@ where
         &self,
         input: &[u8],
         reply: &'a mut [u8],
+        timeout: Timeout,
     ) -> NtResult<&'a [u8]> {
-        self.inner.client.send_message_with_reply(input, reply)
+        self.inner
+            .client
+            .send_message_with_reply(input, reply, timeout)
     }
 }
 
