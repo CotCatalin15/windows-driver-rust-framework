@@ -14,7 +14,9 @@ use windows_sys::Win32::Foundation::{HANDLE, NTSTATUS};
 use crate::context::ContextRegistry;
 
 use super::{
-    process_create_notifier::{try_register_process_notifier, PsCreateNotifyCallback},
+    process_create_notifier::{
+        start_collector, stop_collector, try_register_process_notifier, PsCreateNotifyCallback,
+    },
     ProcessCollectorError,
 };
 
@@ -88,6 +90,27 @@ impl<Factory: IProcessItemFactory> ProcessCollector<Factory> {
 
     pub fn find_by_pid(&self, pid: HANDLE) -> Option<Arc<ProcessInfo<Factory::Item>>> {
         self.inner.find_by_pid(pid)
+    }
+
+    pub fn start(&self) -> anyhow::Result<(), ProcessCollectorError> {
+        unsafe {
+            let collector: *const ProcessCollectorInner<Factory> = self.inner.as_ref();
+            start_collector(&*collector).map_err(|nt| ProcessCollectorError::NtStatus(nt))
+        }
+    }
+
+    pub fn stop(&self) -> anyhow::Result<(), ProcessCollectorError> {
+        unsafe { stop_collector().map_err(|nt| ProcessCollectorError::NtStatus(nt)) }
+    }
+
+    pub fn clear(&self) {
+        self.inner.process_map.write().clear();
+    }
+}
+
+impl<Factory: IProcessItemFactory> Drop for ProcessCollector<Factory> {
+    fn drop(&mut self) {
+        let _ = self.stop();
     }
 }
 

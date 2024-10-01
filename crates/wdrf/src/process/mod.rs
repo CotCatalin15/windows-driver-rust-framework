@@ -1,6 +1,7 @@
 mod structs;
 
 pub use structs::*;
+use wdrf_std::NtStatusError;
 
 pub mod collector;
 pub mod process_create_notifier;
@@ -9,4 +10,5 @@ pub mod process_create_notifier;
 pub enum ProcessCollectorError {
     NoMemory,
     ContextRegisterError,
+    NtStatus(NtStatusError),
 }

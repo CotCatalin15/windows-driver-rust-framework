@@ -2,6 +2,7 @@
 
 use core::panic::PanicInfo;
 
+use collector::TestCollector;
 use flt_communication::{create_communication, FltCallbackImpl};
 use maple::consumer::{get_global_registry, set_global_consumer};
 
@@ -47,8 +48,7 @@ static CONTEXT_REGISTRY: FixedGlobalContextRegistry<10> = FixedGlobalContextRegi
 
 #[allow(dead_code)]
 struct TestDriverContext {
-    filter: FltFilter,
-    communication: FltClientCommunication<FltCallbackImpl>,
+    collector: TestCollector,
 }
 
 static DRIVER_CONTEXT: Context<TestDriverContext> = Context::uninit();
@@ -138,31 +138,32 @@ fn driver_main(
 
     info!(name = "Driver entry", "Initializing driver");
 
-    let registration = FltRegistrationBuilder::new()
-        .unload(Some(minifilter_unload))
-        .operations(FLT_OPS.as_ref().unwrap().get())
-        .build()?;
-    let filter = registration
-        .register_filter(driver)
-        .map_err(|_| anyhow::Error::msg("Failed to register filter"))?;
+    /*
+        let registration = FltRegistrationBuilder::new()
+            .unload(Some(minifilter_unload))
+            .operations(FLT_OPS.as_ref().unwrap().get())
+            .build()?;
+        let filter = registration
+            .register_filter(driver)
+            .map_err(|_| anyhow::Error::msg("Failed to register filter"))?;
 
-    let comm = create_communication(filter.clone())
-        .map_err(|_| anyhow::Error::msg("Failed to create communication"))?;
+        let comm = create_communication(filter.clone())
+            .map_err(|_| anyhow::Error::msg("Failed to create communication"))?;
+    */
+
+    driver.DriverUnload = Some(driver_unload);
 
     DRIVER_CONTEXT.init(&CONTEXT_REGISTRY, move || TestDriverContext {
-        filter,
-        communication: comm,
+        collector: TestCollector::new(&CONTEXT_REGISTRY),
     })?;
     let context = DRIVER_CONTEXT.get();
 
-    unsafe {
-        context
-            .filter
-            .start_filtering()
-            .map_err(|_| anyhow::Error::msg("Failed to start filtering"))?;
-    }
-
     Ok(())
+}
+
+pub unsafe extern "system" fn driver_unload() {
+    get_global_registry().disable_consumer();
+    CONTEXT_REGISTRY.drop_self();
 }
 
 pub unsafe extern "system" fn minifilter_unload(_flags: u32) -> NTSTATUS {
