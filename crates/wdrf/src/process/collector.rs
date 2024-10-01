@@ -1,158 +1,169 @@
-use core::cell::UnsafeCell;
-
 use wdrf_std::{
-    hashbrown::{HashMap, HashMapExt, OccupiedError},
-    kmalloc::TaggedObject,
-    structs::{PEPROCESS, PKPROCESS},
+    boxed::{Box, BoxExt},
+    constants::PoolFlags,
+    hashbrown::{HashMap, HashMapExt},
+    kmalloc::{GlobalKernelAllocator, MemoryTag, TaggedObject},
     sync::{
         arc::{Arc, ArcExt},
         rwlock::ExRwLock,
     },
-    traits::DispatchSafe,
-    NtResult, NtResultEx,
+    NtStatusError,
 };
-use windows_sys::{
-    Wdk::System::SystemServices::{PsSetCreateProcessNotifyRoutineEx, PS_CREATE_NOTIFY_INFO},
-    Win32::Foundation::HANDLE,
+use windows_sys::Win32::Foundation::{HANDLE, NTSTATUS};
+
+use crate::context::ContextRegistry;
+
+use super::{
+    process_create_notifier::{try_register_process_notifier, PsCreateNotifyCallback},
+    ProcessCollectorError,
 };
 
-pub trait ProcessDescriptor {
-    fn pid(&self) -> u64;
+pub enum ItemRegistrationVerdict<Item> {
+    Register(Item),
+    NoItem,
+    NoRegister,
+    Deny(NTSTATUS),
 }
 
-pub trait ProcessHook {
-    type Item: ProcessDescriptor + TaggedObject;
+pub trait IProcessItemFactory: Send + Sync + 'static {
+    type Item: Send + Sync + 'static;
 
-    fn on_process_create(
-        &mut self,
-        process: PEPROCESS,
-        process_id: HANDLE,
-        create_info: &PS_CREATE_NOTIFY_INFO,
-    ) -> anyhow::Result<Self::Item>;
-
-    fn on_process_destroy(&mut self, item: &Self::Item);
+    fn create(
+        &self,
+        process: wdrf_std::object::ArcKernelObj<wdrf_std::structs::PEPROCESS>,
+        pid: HANDLE,
+        process_info: &super::PsCreateNotifyInfo,
+    ) -> anyhow::Result<ItemRegistrationVerdict<Self::Item>, ProcessCollectorError>;
 }
 
-pub struct ProcessRegistry<H: ProcessHook + DispatchSafe + Send> {
-    started: UnsafeCell<bool>,
-    hook: H,
-
-    processes: ExRwLock<HashMap<u64, Arc<H::Item>>>,
+pub struct ProcessCollector<Factory: IProcessItemFactory> {
+    inner: Box<ProcessCollectorInner<Factory>>,
 }
 
-unsafe impl<H: ProcessHook + DispatchSafe + Send> DispatchSafe for ProcessRegistry<H> {}
+#[allow(dead_code)]
+pub struct ProcessInfo<Item: Send + Sync + 'static> {
+    pid: HANDLE, //TODO: Maybe usize ?
+    item: Option<Item>,
+}
 
-impl<H: ProcessHook + DispatchSafe + Send> ProcessRegistry<H> {
-    pub fn new(hook: H) -> Self {
-        Self {
-            started: UnsafeCell::new(false),
-            hook,
-            processes: ExRwLock::new(HashMap::create()),
-        }
+impl<Item: Send + Sync + 'static> TaggedObject for ProcessInfo<Item> {
+    fn tag() -> MemoryTag {
+        MemoryTag::new_from_bytes(b"pinf")
+    }
+}
+
+impl<Item: Send + Sync + 'static> ProcessInfo<Item> {
+    fn try_create(
+        item: Option<Item>,
+        _process: wdrf_std::object::ArcKernelObj<wdrf_std::structs::PEPROCESS>,
+        pid: HANDLE,
+        _process_info: &super::PsCreateNotifyInfo,
+    ) -> anyhow::Result<Self> {
+        Ok(Self { pid: pid, item })
     }
 
-    pub fn start_collector(&'static mut self) -> NtResult<()> {
+    pub fn pid(&self) -> HANDLE {
+        self.pid
+    }
+
+    pub fn item(&self) -> Option<&Item> {
+        self.item.as_ref()
+    }
+}
+
+impl<Factory: IProcessItemFactory> ProcessCollector<Factory> {
+    pub fn try_create_with_registry<R: ContextRegistry>(
+        registry: &'static R,
+        factory: Factory,
+    ) -> anyhow::Result<Self, ProcessCollectorError> {
         unsafe {
-            if *self.started.get() {
-                return Ok(());
-            }
+            let collector = ProcessCollectorInner::try_create(factory)?;
+            let inner = Box::try_create(collector).map_err(|_| ProcessCollectorError::NoMemory)?;
 
-            let status = PsSetCreateProcessNotifyRoutineEx(
-                Some(create_process_notify_implementation),
-                false as _,
-            );
-            NtResult::from_status(status, || ())?;
-            *self.started.get() = true;
-            GLOBAL_PROCESS_COLLECTOR = Some(self);
+            try_register_process_notifier(registry)?;
+
+            Ok(Self { inner })
         }
+    }
+
+    pub fn find_by_pid(&self, pid: HANDLE) -> Option<Arc<ProcessInfo<Factory::Item>>> {
+        self.inner.find_by_pid(pid)
+    }
+}
+
+struct ProcessCollectorInner<Factory: IProcessItemFactory> {
+    factory: Factory,
+    process_map: ExRwLock<HashMap<isize, Arc<ProcessInfo<Factory::Item>>>>,
+}
+
+unsafe impl<Factory: IProcessItemFactory> Send for ProcessCollectorInner<Factory> {}
+unsafe impl<Factory: IProcessItemFactory> Sync for ProcessCollectorInner<Factory> {}
+
+impl<Factory: IProcessItemFactory> TaggedObject for ProcessCollectorInner<Factory> {
+    fn tag() -> wdrf_std::kmalloc::MemoryTag {
+        wdrf_std::kmalloc::MemoryTag::new_from_bytes(b"pcin")
+    }
+}
+
+impl<Factory: IProcessItemFactory> ProcessCollectorInner<Factory> {
+    fn try_create(factory: Factory) -> anyhow::Result<Self, ProcessCollectorError> {
+        Ok(Self {
+            factory,
+            process_map: ExRwLock::new(HashMap::create_in(GlobalKernelAllocator::new(
+                MemoryTag::new_from_bytes(b"pshs"),
+                PoolFlags::POOL_FLAG_NON_PAGED,
+            ))),
+        })
+    }
+
+    fn find_by_pid(&self, pid: HANDLE) -> Option<Arc<ProcessInfo<Factory::Item>>> {
+        let guard = self.process_map.read();
+
+        guard.get(&pid).cloned()
+    }
+}
+
+impl<Factory: IProcessItemFactory> PsCreateNotifyCallback for ProcessCollectorInner<Factory> {
+    fn on_create(
+        &self,
+        process: wdrf_std::object::ArcKernelObj<wdrf_std::structs::PEPROCESS>,
+        pid: HANDLE,
+        process_info: &super::PsCreateNotifyInfo,
+    ) -> wdrf_std::NtResult<()> {
+        let registration = self
+            .factory
+            .create(process.clone(), pid, process_info)
+            .unwrap_or(ItemRegistrationVerdict::NoItem);
+
+        let item = match registration {
+            ItemRegistrationVerdict::Register(item) => Some(item),
+            ItemRegistrationVerdict::NoItem => None,
+            ItemRegistrationVerdict::NoRegister => return Ok(()),
+            ItemRegistrationVerdict::Deny(status) => return Err(NtStatusError::Status(status)),
+        };
+
+        let proc_info = ProcessInfo::try_create(item, process, pid, process_info);
+        if proc_info.is_err() {
+            return Ok(());
+        }
+        let proc_info = proc_info.unwrap();
+
+        let proc_info = Arc::try_create(proc_info);
+        if proc_info.is_err() {
+            return Ok(());
+        }
+
+        let proc_info = proc_info.unwrap();
+
+        let mut guard = self.process_map.write();
+        let _ = guard.insert(pid, proc_info);
 
         Ok(())
     }
 
-    pub fn stop_collector(&self) -> NtResult<()> {
-        unsafe {
-            if *self.started.get() {
-                GLOBAL_PROCESS_COLLECTOR = None;
-                let status = PsSetCreateProcessNotifyRoutineEx(
-                    Some(create_process_notify_implementation),
-                    true as _,
-                );
-                NtResult::from_status(status, || ())?;
-            }
-            *self.started.get() = false;
-        }
-
-        Ok(())
-    }
-
-    pub fn find_by_pid(&self, process_id: u64) -> Option<Arc<H::Item>> {
-        let guard = self.processes.read();
-
-        guard.get(&process_id).cloned()
-    }
-}
-
-impl<H: ProcessHook + Send + DispatchSafe> Drop for ProcessRegistry<H> {
-    fn drop(&mut self) {
-        let _ = self.stop_collector();
-    }
-}
-
-trait ProcessCollectorCallbacks {
-    fn on_process_create(
-        &mut self,
-        process: PEPROCESS,
-        process_id: HANDLE,
-        create_info: &PS_CREATE_NOTIFY_INFO,
-    ) -> anyhow::Result<()>;
-
-    fn on_process_destroy(&mut self, process: PEPROCESS, process_id: HANDLE);
-}
-
-impl<H: ProcessHook + Send + DispatchSafe> ProcessCollectorCallbacks for ProcessRegistry<H> {
-    fn on_process_create(
-        &mut self,
-        process: PEPROCESS,
-        process_id: HANDLE,
-        create_info: &PS_CREATE_NOTIFY_INFO,
-    ) -> anyhow::Result<()> {
-        let item = self
-            .hook
-            .on_process_create(process, process_id, create_info)?;
-
-        let item = Arc::try_create(item)?;
-
-        let mut guard = self.processes.write();
-        let occupation = guard.try_insert(process_id as _, item);
-
-        if let Err(OccupiedError { mut entry, value }) = occupation {
-            entry.insert(value);
-        }
-
-        Ok(())
-    }
-
-    fn on_process_destroy(&mut self, _process: PEPROCESS, process_id: HANDLE) {
-        let mut guard = self.processes.write();
-
-        let process_id: u64 = process_id as _;
-        guard.remove(&process_id);
-    }
-}
-
-static mut GLOBAL_PROCESS_COLLECTOR: Option<&'static mut dyn ProcessCollectorCallbacks> = None;
-
-unsafe extern "system" fn create_process_notify_implementation(
-    process: HANDLE,
-    process_id: HANDLE,
-    create_info: *mut PS_CREATE_NOTIFY_INFO,
-) {
-    let process: PKPROCESS = process as _;
-    if let Some(ref mut callbacks) = GLOBAL_PROCESS_COLLECTOR {
-        if create_info.is_null() {
-            callbacks.on_process_destroy(process, process_id);
-        } else {
-            let _ = callbacks.on_process_create(process, process_id, &*create_info);
-        }
+    fn on_destroy(&self, pid: HANDLE) {
+        let mut guard = self.process_map.write();
+        let _old_item = guard.remove(&pid);
+        drop(guard);
     }
 }

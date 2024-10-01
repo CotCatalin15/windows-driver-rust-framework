@@ -1,4 +1,4 @@
-use core::cell::UnsafeCell;
+use core::{cell::UnsafeCell, pin::Pin};
 
 use windows_sys::Wdk::{
     Foundation::FAST_MUTEX,
@@ -10,10 +10,15 @@ use windows_sys::Wdk::{
     },
 };
 
-use crate::traits::{DispatchSafe, ReadLock, WriteLock};
+use crate::{
+    boxed::{Box, BoxExt},
+    constants::PoolFlags,
+    kmalloc::{GlobalKernelAllocator, MemoryTag},
+    traits::{DispatchSafe, ReadLock, WriteLock},
+};
 
 pub struct GuardedMutex {
-    inner: UnsafeCell<FAST_MUTEX>,
+    inner: Pin<Box<UnsafeCell<FAST_MUTEX>>>,
 }
 
 unsafe impl Send for GuardedMutex {}
@@ -22,11 +27,19 @@ unsafe impl Sync for GuardedMutex {}
 impl GuardedMutex {
     pub fn new() -> Self {
         unsafe {
-            let mut mutex = core::mem::zeroed();
-            KeInitializeGuardedMutex(&mut mutex);
-            Self {
-                inner: UnsafeCell::new(mutex),
-            }
+            //TODO: use try_create instead of new for mutex creation
+            let mut mutex = Box::try_pin_in(
+                UnsafeCell::new(core::mem::zeroed()),
+                GlobalKernelAllocator::new(
+                    MemoryTag::new_from_bytes(b"gurd"),
+                    PoolFlags::POOL_FLAG_NON_PAGED,
+                ),
+            )
+            .unwrap();
+
+            KeInitializeGuardedMutex(mutex.get_mut());
+
+            Self { inner: mutex }
         }
     }
 }

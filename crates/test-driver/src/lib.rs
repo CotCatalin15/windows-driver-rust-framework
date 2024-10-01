@@ -14,14 +14,13 @@ use wdrf::minifilter::{FltFilter, FltOperationRegistrationSlice, FltRegistration
 use wdrf_std::constants::PoolFlags;
 use wdrf_std::dbg_break;
 use wdrf_std::kmalloc::{GlobalKernelAllocator, MemoryTag};
-use wdrf_std::sync::arc::{Arc, ArcExt};
 use windows_sys::Wdk::Foundation::DRIVER_OBJECT;
 use windows_sys::Wdk::Storage::FileSystem::Minifilters::{
     FltGetRequestorProcessId, FLT_CALLBACK_DATA, FLT_OPERATION_REGISTRATION,
     FLT_POSTOP_CALLBACK_STATUS, FLT_POSTOP_FINISHED_PROCESSING, FLT_PREOP_CALLBACK_STATUS,
     FLT_PREOP_COMPLETE, FLT_RELATED_OBJECTS,
 };
-use windows_sys::Wdk::System::SystemServices::{KeBugCheckEx, IRP_MJ_CREATE};
+use windows_sys::Wdk::System::SystemServices::KeBugCheckEx;
 use windows_sys::Win32::Foundation::{
     NTSTATUS, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING,
 };
@@ -36,18 +35,17 @@ static KERNEL_GLOBAL_ALLOCATOR: GlobalKernelAllocator = GlobalKernelAllocator::n
 );
 
 #[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
+fn panic(_info: &PanicInfo) -> ! {
     unsafe {
         //println!("[PANIC] called: {:#?}", info);
         KeBugCheckEx(0x1234, 0, 0, 0, 0);
         loop {}
     }
-
-    loop {}
 }
 
 static CONTEXT_REGISTRY: FixedGlobalContextRegistry<10> = FixedGlobalContextRegistry::new();
 
+#[allow(dead_code)]
 struct TestDriverContext {
     filter: FltFilter,
     communication: FltClientCommunication<FltCallbackImpl>,
@@ -74,21 +72,23 @@ pub unsafe extern "system" fn driver_entry(
     }
 }
 
+#[allow(dead_code)]
 unsafe extern "system" fn pre_op(
     data: *mut FLT_CALLBACK_DATA,
-    fltobjects: *const FLT_RELATED_OBJECTS,
-    completioncontext: *mut *mut core::ffi::c_void,
+    _fltobjects: *const FLT_RELATED_OBJECTS,
+    _completioncontext: *mut *mut core::ffi::c_void,
 ) -> FLT_PREOP_CALLBACK_STATUS {
     //SimRepGetIoOpenDriverRegistryKey
     FltGetRequestorProcessId(data);
     FLT_PREOP_COMPLETE
 }
 
+#[allow(dead_code)]
 unsafe extern "system" fn post_op(
-    data: *mut FLT_CALLBACK_DATA,
-    fltobjects: *const FLT_RELATED_OBJECTS,
-    completioncontext: *const core::ffi::c_void,
-    flags: u32,
+    _data: *mut FLT_CALLBACK_DATA,
+    _fltobjects: *const FLT_RELATED_OBJECTS,
+    _completioncontext: *const core::ffi::c_void,
+    _flags: u32,
 ) -> FLT_POSTOP_CALLBACK_STATUS {
     FLT_POSTOP_FINISHED_PROCESSING
 }
@@ -130,7 +130,7 @@ fn init_logger() {
 
 fn driver_main(
     driver: &mut DRIVER_OBJECT,
-    registry_path: &'static UNICODE_STRING,
+    _registry_path: &'static UNICODE_STRING,
 ) -> anyhow::Result<()> {
     dbg_break();
 

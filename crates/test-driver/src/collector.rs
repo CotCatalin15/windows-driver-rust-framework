@@ -1,47 +1,56 @@
-use wdrf::process::collector::{ProcessDescriptor, ProcessHook};
-use wdrf_std::{kmalloc::TaggedObject, structs::PEPROCESS, traits::DispatchSafe};
-use windows_sys::Wdk::System::SystemServices::PS_CREATE_NOTIFY_INFO;
+use wdrf::{
+    context::ContextRegistry,
+    process::collector::{
+        IProcessItemFactory, ItemRegistrationVerdict, ProcessCollector, ProcessInfo,
+    },
+};
+use wdrf_std::{
+    object::ArcKernelObj,
+    structs::{PEPROCESS, PFILE_OBJECT},
+    sync::arc::Arc,
+};
 use windows_sys::Win32::Foundation::HANDLE;
 
-pub struct TestProcessCollector {}
+struct ProcessCreateFactory {}
 
-pub struct ProcessItem {
-    pid: u64,
-}
+impl IProcessItemFactory for ProcessCreateFactory {
+    type Item = (ArcKernelObj<PEPROCESS>, ArcKernelObj<PFILE_OBJECT>);
 
-impl TaggedObject for ProcessItem {}
-
-impl ProcessDescriptor for ProcessItem {
-    fn pid(&self) -> u64 {
-        self.pid
+    fn create(
+        &self,
+        process: ArcKernelObj<wdrf_std::structs::PEPROCESS>,
+        _pid: windows_sys::Win32::Foundation::HANDLE,
+        process_info: &wdrf::process::PsCreateNotifyInfo,
+    ) -> anyhow::Result<
+        wdrf::process::collector::ItemRegistrationVerdict<Self::Item>,
+        wdrf::process::ProcessCollectorError,
+    > {
+        Ok(ItemRegistrationVerdict::Register((
+            process,
+            ArcKernelObj::new(*process_info.file_object.as_ref().unwrap(), true),
+        )))
     }
 }
 
-impl ProcessItem {
-    pub fn new(pid: u64) -> Self {
-        Self { pid }
-    }
+pub struct TestCollector {
+    collector: ProcessCollector<ProcessCreateFactory>,
 }
 
-impl TestProcessCollector {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-unsafe impl DispatchSafe for TestProcessCollector {}
-
-impl ProcessHook for TestProcessCollector {
-    type Item = ProcessItem;
-
-    fn on_process_create(
-        &mut self,
-        _process: PEPROCESS,
-        process_id: HANDLE,
-        _create_info: &PS_CREATE_NOTIFY_INFO,
-    ) -> anyhow::Result<Self::Item> {
-        Ok(ProcessItem::new(process_id as _))
+impl TestCollector {
+    pub fn new<R: ContextRegistry>(registry: &'static R) -> Self {
+        Self {
+            collector: ProcessCollector::try_create_with_registry(
+                registry,
+                ProcessCreateFactory {},
+            )
+            .unwrap(),
+        }
     }
 
-    fn on_process_destroy(&mut self, _item: &Self::Item) {}
+    pub fn find_by_pid(
+        &self,
+        pid: HANDLE,
+    ) -> Option<Arc<ProcessInfo<(ArcKernelObj<PEPROCESS>, ArcKernelObj<PFILE_OBJECT>)>>> {
+        self.collector.find_by_pid(pid)
+    }
 }

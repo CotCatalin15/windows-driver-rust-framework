@@ -1,21 +1,15 @@
-use core::num::NonZeroU32;
-
 use wdrf::minifilter::{
-    communication::client_communication::{
-        FltClient, FltClientCommunication, FltCommunicationCallback,
-    },
+    communication::client_communication::{FltClientCommunication, FltCommunicationCallback},
     FltFilter,
 };
-use wdrf_std::{
-    dbg_break, io::Write, slice::tracked_slice::TrackedSlice, sync::arc::Arc, NtResult,
-};
+use wdrf_std::{dbg_break, io::Write, slice::tracked_slice::TrackedSlice, NtResult};
 
 use maple::info;
 
 pub struct FltCallbackImpl {}
 
 impl FltCommunicationCallback for FltCallbackImpl {
-    fn connect(&self, buffer: Option<&[u8]>) -> anyhow::Result<()> {
+    fn connect(&self, _buffer: Option<&[u8]>) -> anyhow::Result<()> {
         dbg_break();
 
         Ok(())
