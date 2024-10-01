@@ -1,3 +1,4 @@
+use nt_string::unicode_string::NtUnicodeStr;
 use wdrf::{
     context::ContextRegistry,
     process::collector::{
@@ -25,6 +26,16 @@ impl IProcessItemFactory for ProcessCreateFactory {
         wdrf::process::collector::ItemRegistrationVerdict<Self::Item>,
         wdrf::process::ProcessCollectorError,
     > {
+        let path = process_info
+            .image_file_name
+            .unwrap_or(nt_string::nt_unicode_str!("Unknown process"));
+
+        let cmd = process_info
+            .command_line
+            .unwrap_or(nt_string::nt_unicode_str!("Unknown command line"));
+
+        maple::info!("Creating process info for {} Cmd: {}", path, cmd);
+
         Ok(ItemRegistrationVerdict::Register((
             process,
             ArcKernelObj::new(*process_info.file_object.as_ref().unwrap(), true),
@@ -38,13 +49,12 @@ pub struct TestCollector {
 
 impl TestCollector {
     pub fn new<R: ContextRegistry>(registry: &'static R) -> Self {
-        Self {
-            collector: ProcessCollector::try_create_with_registry(
-                registry,
-                ProcessCreateFactory {},
-            )
-            .unwrap(),
-        }
+        let collector =
+            ProcessCollector::try_create_with_registry(registry, ProcessCreateFactory {}).unwrap();
+
+        collector.start().unwrap();
+
+        Self { collector }
     }
 
     pub fn find_by_pid(

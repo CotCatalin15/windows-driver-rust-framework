@@ -67,9 +67,9 @@ impl DbgWritable {
 impl core::fmt::Write for DbgWritable {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         if self.offset + s.len() + 1 >= self.buffer.len() {
-            //for 0 terminated string
+            //for 0 terminating string
             self.buffer
-                .try_resize(s.len() + 1, 0)
+                .try_resize(self.offset + s.len() + 1, 0)
                 .map_err(|_| core::fmt::Error)?;
         }
 

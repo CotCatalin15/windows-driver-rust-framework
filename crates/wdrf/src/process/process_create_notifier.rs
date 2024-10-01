@@ -83,7 +83,7 @@ NOT THREAD SAFE
 */
 pub unsafe fn stop_collector() -> NtResult<()> {
     let status =
-        unsafe { PsSetCreateProcessNotifyRoutineEx(Some(process_notify_routine), false as _) };
+        unsafe { PsSetCreateProcessNotifyRoutineEx(Some(process_notify_routine), true as _) };
 
     NtResult::from_status(status, || {
         //Only unregister on success
@@ -110,28 +110,31 @@ unsafe extern "system" fn process_notify_routine(
     let process: PEPROCESS = process_as_isize as *mut _;
     let process = NonNullKrnlResource::new(process);
 
-    GLOBAL_PROCESS_COLLECTOR.get().callback.inspect(|cb| {
-        match process {
-            None => {
-                //Process delete
-                cb.on_destroy(processid);
-            }
-            Some(process) => {
-                //Process create
-                let ke_process = ArcKernelObj::new(process, true);
+    if process.is_none() {
+        maple::error!("Received null eprocess in process_notify_routine");
+        return;
+    }
+    let eprocess = process.unwrap();
 
-                let _ = cb
-                    .on_create(
-                        ke_process,
-                        processid,
-                        &PsCreateNotifyInfo::new(&mut unsafe { *createinfo }),
-                    )
-                    .inspect_err(|e| match e {
-                        wdrf_std::NtStatusError::Status(status) => {
-                            (*createinfo).CreationStatus = *status
-                        }
-                    });
-            }
+    GLOBAL_PROCESS_COLLECTOR.get().callback.inspect(|cb| {
+        if createinfo.is_null() {
+            //Process delete
+            cb.on_destroy(processid);
+        } else {
+            //Process create
+            let ke_process = ArcKernelObj::new(eprocess, true);
+
+            let _ = cb
+                .on_create(
+                    ke_process,
+                    processid,
+                    &PsCreateNotifyInfo::new(&mut unsafe { *createinfo }),
+                )
+                .inspect_err(|e| match e {
+                    wdrf_std::NtStatusError::Status(status) => {
+                        (*createinfo).CreationStatus = *status
+                    }
+                });
         }
     });
 }
