@@ -1,5 +1,6 @@
 use core::time::Duration;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Timeout {
     timeout: Option<i64>,
 }

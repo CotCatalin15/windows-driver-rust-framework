@@ -8,7 +8,7 @@ use windows_sys::Wdk::System::SystemServices::{
 };
 use windows_sys::Win32::Foundation::{HANDLE, STATUS_OBJECT_TYPE_MISMATCH};
 
-use core::ptr::NonNull;
+use core::ffi::c_void;
 
 use crate::constants::{
     ExEventObjectType, ExSemaphoreObjectType, IoFileObjectType, PsProcessType, PsThreadType,
@@ -25,6 +25,7 @@ use crate::structs::PPROCESS_ACCESS_TOKEN;
 use crate::structs::PRKRESOURCEMANAGER;
 use crate::structs::{PFILE_OBJECT, PKTHREAD};
 use crate::sys::WaitableObject;
+use crate::traits::DispatchSafe;
 use crate::{NtResult, NtResultEx, NtStatusError};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -60,18 +61,65 @@ impl KernelObjectType {
     }
 }
 
-pub trait KernelResource {
+pub trait KernelResource: Clone {
     fn object_type() -> KernelObjectType;
+
+    fn as_mut_ptr(&self) -> *mut c_void;
+    unsafe fn from_raw_ptr(ptr: *mut c_void) -> Self;
+}
+
+#[derive(Clone, Copy)]
+pub struct NonNullKrnlResource<T: KernelResource> {
+    resource: T,
+}
+
+impl<T> NonNullKrnlResource<T>
+where
+    T: KernelResource,
+{
+    pub fn new(resource: T) -> Option<Self> {
+        if resource.as_mut_ptr().is_null() {
+            None
+        } else {
+            Some(Self { resource })
+        }
+    }
+
+    pub fn leak(self) -> T {
+        self.resource
+    }
+
+    pub fn as_ptr(&self) -> *const c_void {
+        self.resource.as_mut_ptr().cast()
+    }
+
+    pub fn as_mut_ptr(&self) -> *mut c_void {
+        self.resource.as_mut_ptr()
+    }
 }
 
 pub struct ArcKernelObj<T: KernelResource> {
-    obj: NonNull<T>,
+    obj: NonNullKrnlResource<T>,
 }
+
+unsafe impl<T: KernelResource> Send for ArcKernelObj<T> {}
+unsafe impl<T: KernelResource> Sync for ArcKernelObj<T> {}
+unsafe impl<T: KernelResource> DispatchSafe for ArcKernelObj<T> {}
 
 impl<T> ArcKernelObj<T>
 where
     T: KernelResource,
 {
+    pub fn new(obj: NonNullKrnlResource<T>, reference: bool) -> Self {
+        unsafe {
+            if reference {
+                ObfReferenceObject(obj.as_ptr().cast());
+            }
+
+            Self { obj }
+        }
+    }
+
     pub fn from_handle(handle: &Handle, access: u32) -> NtResult<Self> {
         if !handle
             .object_type()
@@ -101,10 +149,11 @@ where
                 core::ptr::null_mut(),
             );
 
-            let non_null = NonNull::new(obj_ptr);
+            let non_null: Option<NonNullKrnlResource<T>> =
+                NonNullKrnlResource::new(T::from_raw_ptr(obj_ptr));
 
             if let Some(obj) = non_null {
-                NtResult::from_status(status, || Self { obj: obj.cast() })
+                NtResult::from_status(status, || Self { obj })
             } else {
                 Err(NtStatusError::Status(STATUS_OBJECT_TYPE_MISMATCH))
             }
@@ -129,38 +178,19 @@ where
                 core::ptr::null_mut(),
             );
 
-            let non_null = NonNull::new(obj_ptr);
+            let non_null: Option<NonNullKrnlResource<T>> =
+                NonNullKrnlResource::new(T::from_raw_ptr(obj_ptr));
 
             if let Some(obj) = non_null {
-                NtResult::from_status(status, || Self { obj: obj.cast() })
+                NtResult::from_status(status, || Self { obj })
             } else {
                 Err(NtStatusError::Status(STATUS_OBJECT_TYPE_MISMATCH))
             }
         }
     }
 
-    ///
-    /// # Safety
-    ///
-    /// As long as T is a valid ptr to an objects it ok
-    ///
-    pub unsafe fn from_raw_object(obj: NonNull<T>, reference: bool) -> Self {
-        unsafe {
-            if reference {
-                ObfReferenceObject(obj.as_ptr().cast());
-            }
-
-            Self { obj }
-        }
-    }
-
-    ///
-    /// # Safety
-    ///
-    /// As long as this objects lives its fine to use it
-    ///
-    pub unsafe fn raw_obj(&self) -> *mut T {
-        self.obj.as_ptr()
+    pub unsafe fn as_raw_obj(&self) -> T {
+        T::from_raw_ptr(self.obj.as_mut_ptr())
     }
 }
 
@@ -183,7 +213,9 @@ where
         unsafe {
             let _ = ObfReferenceObject(self.obj.as_ptr().cast());
         }
-        Self { obj: self.obj }
+        Self {
+            obj: self.obj.clone(),
+        }
     }
 }
 
@@ -192,6 +224,14 @@ macro_rules! impl_kernel_resource {
         impl KernelResource for $o {
             fn object_type() -> KernelObjectType {
                 $t
+            }
+
+            fn as_mut_ptr(&self) -> *mut c_void {
+                self.cast()
+            }
+
+            unsafe fn from_raw_ptr(ptr: *mut c_void) -> $o {
+                ptr.cast()
             }
         }
     };
@@ -214,12 +254,12 @@ impl_kernel_resource!(PKTRANSACTION, KernelObjectType::Transcation);
 
 unsafe impl WaitableObject for ArcKernelObj<PKTHREAD> {
     fn kernel_object(&self) -> &crate::sys::WaitableKernelObject {
-        unsafe { self.obj.cast().as_ref() }
+        unsafe { &*(self.obj.as_mut_ptr() as *const crate::sys::WaitableKernelObject) }
     }
 }
 
 unsafe impl WaitableObject for ArcKernelObj<PKPROCESS> {
     fn kernel_object(&self) -> &crate::sys::WaitableKernelObject {
-        unsafe { self.obj.cast().as_ref() }
+        unsafe { &*(self.obj.as_mut_ptr() as *const crate::sys::WaitableKernelObject) }
     }
 }

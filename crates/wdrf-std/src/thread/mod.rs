@@ -88,7 +88,7 @@ unsafe impl<T> WaitableObject for JoinHandle<T> {
     fn kernel_object(&self) -> &WaitableKernelObject {
         unsafe {
             let packet = &mut *self.packet.inner.get();
-            let ptr: *const PKTHREAD = packet.thread_obj.as_ref().unwrap().raw_obj();
+            let ptr: *const PKTHREAD = packet.thread_obj.as_ref().unwrap().as_raw_obj().cast();
 
             &*ptr.cast()
         }
