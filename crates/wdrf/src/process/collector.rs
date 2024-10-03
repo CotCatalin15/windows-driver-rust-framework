@@ -1,5 +1,6 @@
+use core::{mem::swap, ops::DerefMut};
+
 use wdrf_std::{
-    boxed::{Box, BoxExt},
     constants::PoolFlags,
     hashbrown::{HashMap, HashMapExt},
     kmalloc::{GlobalKernelAllocator, MemoryTag, TaggedObject},
@@ -14,9 +15,8 @@ use windows_sys::Win32::Foundation::{HANDLE, NTSTATUS};
 use crate::context::ContextRegistry;
 
 use super::{
-    process_create_notifier::{
-        start_collector, stop_collector, try_register_process_notifier, PsCreateNotifyCallback,
-    },
+    notifier::PsNotifierRegistration,
+    process_create_notifier::{try_register_process_notifier, PsCreateNotifyCallback},
     ProcessCollectorError,
 };
 
@@ -27,8 +27,20 @@ pub enum ItemRegistrationVerdict<Item> {
     Deny(NTSTATUS),
 }
 
+pub trait ProcessInfoEvent: Send + Sync + 'static {
+    /*
+    This event is called when a clear/stop is called on the collector
+     */
+    fn unregistered(&self);
+
+    /*
+    This event is called only when a process terminate is received
+     */
+    fn destroy(&self);
+}
+
 pub trait IProcessItemFactory: Send + Sync + 'static {
-    type Item: Send + Sync + 'static;
+    type Item: ProcessInfoEvent;
 
     fn create(
         &self,
@@ -39,7 +51,7 @@ pub trait IProcessItemFactory: Send + Sync + 'static {
 }
 
 pub struct ProcessCollector<Factory: IProcessItemFactory> {
-    inner: Box<ProcessCollectorInner<Factory>>,
+    inner: PsNotifierRegistration<ProcessCollectorInner<Factory>>,
 }
 
 #[allow(dead_code)]
@@ -80,7 +92,7 @@ impl<Factory: IProcessItemFactory> ProcessCollector<Factory> {
     ) -> anyhow::Result<Self, ProcessCollectorError> {
         unsafe {
             let collector = ProcessCollectorInner::try_create(factory)?;
-            let inner = Box::try_create(collector).map_err(|_| ProcessCollectorError::NoMemory)?;
+            let inner = PsNotifierRegistration::try_create(collector)?;
 
             try_register_process_notifier(registry)?;
 
@@ -93,24 +105,15 @@ impl<Factory: IProcessItemFactory> ProcessCollector<Factory> {
     }
 
     pub fn start(&self) -> anyhow::Result<(), ProcessCollectorError> {
-        unsafe {
-            let collector: *const ProcessCollectorInner<Factory> = self.inner.as_ref();
-            start_collector(&*collector).map_err(|nt| ProcessCollectorError::NtStatus(nt))
-        }
+        self.inner.try_start()
     }
 
     pub fn stop(&self) -> anyhow::Result<(), ProcessCollectorError> {
-        unsafe { stop_collector().map_err(|nt| ProcessCollectorError::NtStatus(nt)) }
+        self.inner.try_stop().inspect(|_| self.clear())
     }
 
     pub fn clear(&self) {
-        self.inner.process_map.write().clear();
-    }
-}
-
-impl<Factory: IProcessItemFactory> Drop for ProcessCollector<Factory> {
-    fn drop(&mut self) {
-        let _ = self.stop();
+        self.inner.clear();
     }
 }
 
@@ -129,13 +132,17 @@ impl<Factory: IProcessItemFactory> TaggedObject for ProcessCollectorInner<Factor
 }
 
 impl<Factory: IProcessItemFactory> ProcessCollectorInner<Factory> {
+    fn creat_map() -> HashMap<isize, Arc<ProcessInfo<Factory::Item>>> {
+        HashMap::create_in(GlobalKernelAllocator::new(
+            MemoryTag::new_from_bytes(b"pshs"),
+            PoolFlags::POOL_FLAG_NON_PAGED,
+        ))
+    }
+
     fn try_create(factory: Factory) -> anyhow::Result<Self, ProcessCollectorError> {
         Ok(Self {
             factory,
-            process_map: ExRwLock::new(HashMap::create_in(GlobalKernelAllocator::new(
-                MemoryTag::new_from_bytes(b"pshs"),
-                PoolFlags::POOL_FLAG_NON_PAGED,
-            ))),
+            process_map: ExRwLock::new(Self::creat_map()),
         })
     }
 
@@ -143,6 +150,20 @@ impl<Factory: IProcessItemFactory> ProcessCollectorInner<Factory> {
         let guard = self.process_map.read();
 
         guard.get(&pid).cloned()
+    }
+
+    fn clear(&self) {
+        let mut map = Self::creat_map();
+
+        let mut guard = self.process_map.write();
+        swap(&mut map, guard.deref_mut());
+        drop(guard);
+
+        map.into_iter().for_each(|(_pid, process)| {
+            if let Some(ref item) = process.item {
+                item.unregistered();
+            }
+        });
     }
 }
 
@@ -186,7 +207,11 @@ impl<Factory: IProcessItemFactory> PsCreateNotifyCallback for ProcessCollectorIn
 
     fn on_destroy(&self, pid: HANDLE) {
         let mut guard = self.process_map.write();
-        let _old_item = guard.remove(&pid);
+        let old_item = guard.remove(&pid);
         drop(guard);
+
+        if let Some(process) = old_item {
+            process.item.as_ref().inspect(|item| item.destroy());
+        }
     }
 }

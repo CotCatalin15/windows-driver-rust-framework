@@ -1,8 +1,10 @@
+use core::any::Any;
+
 use wdrf_std::object::{ArcKernelObj, NonNullKrnlResource};
 use wdrf_std::NtResultEx;
 use wdrf_std::{structs::PEPROCESS, NtResult};
 use windows_sys::Wdk::System::SystemServices::{
-    PsSetCreateProcessNotifyRoutineEx, PS_CREATE_NOTIFY_INFO,
+    PsSetCreateProcessNotifyRoutineEx, PCREATE_PROCESS_NOTIFY_ROUTINE_EX, PS_CREATE_NOTIFY_INFO,
 };
 use windows_sys::Win32::Foundation::HANDLE;
 
@@ -11,10 +13,14 @@ use crate::context::{Context, ContextRegistry};
 use super::{ProcessCollectorError, PsCreateNotifyInfo};
 
 struct ProcessCreateNotifier {
-    callback: Option<&'static dyn PsCreateNotifyCallback>,
+    routine: PCREATE_PROCESS_NOTIFY_ROUTINE_EX,
+    callback: Option<&'static dyn Any>,
 }
 
-pub trait PsCreateNotifyCallback: Send + Sync + 'static {
+unsafe impl Send for ProcessCreateNotifier {}
+unsafe impl Sync for ProcessCreateNotifier {}
+
+pub trait PsCreateNotifyCallback: Any + Send + Sync + 'static {
     //Return the create result for the process
     fn on_create(
         &self,
@@ -38,7 +44,10 @@ pub unsafe fn try_register_process_notifier<R: ContextRegistry>(
     registry: &'static R,
 ) -> anyhow::Result<(), ProcessCollectorError> {
     GLOBAL_PROCESS_COLLECTOR
-        .init(registry, || ProcessCreateNotifier { callback: None })
+        .init(registry, || ProcessCreateNotifier {
+            routine: None,
+            callback: None,
+        })
         .map_err(|_| ProcessCollectorError::ContextRegisterError)?;
 
     Ok(())
@@ -62,9 +71,10 @@ pub unsafe fn start_collector<CB: PsCreateNotifyCallback>(callback: &'static CB)
         .callback
         .inspect(|_| panic!("Process collector already initialized"));
 
-    GLOBAL_PROCESS_COLLECTOR.get_mut().callback = Some(callback);
+    GLOBAL_PROCESS_COLLECTOR.get_mut().callback = Some(callback as &'static dyn Any);
+    GLOBAL_PROCESS_COLLECTOR.get_mut().routine = Some(process_notify_routine::<CB>);
 
-    let status = PsSetCreateProcessNotifyRoutineEx(Some(process_notify_routine), false as _);
+    let status = PsSetCreateProcessNotifyRoutineEx(Some(process_notify_routine::<CB>), false as _);
 
     NtResult::from_status(status, || ())
 }
@@ -82,8 +92,9 @@ NOT THREAD SAFE
 
 */
 pub unsafe fn stop_collector() -> NtResult<()> {
-    let status =
-        unsafe { PsSetCreateProcessNotifyRoutineEx(Some(process_notify_routine), true as _) };
+    let status = unsafe {
+        PsSetCreateProcessNotifyRoutineEx(GLOBAL_PROCESS_COLLECTOR.get().routine, true as _)
+    };
 
     NtResult::from_status(status, || {
         //Only unregister on success
@@ -102,7 +113,7 @@ impl Drop for ProcessCreateNotifier {
     }
 }
 
-unsafe extern "system" fn process_notify_routine(
+unsafe extern "system" fn process_notify_routine<CB: PsCreateNotifyCallback>(
     process_as_isize: isize,
     processid: HANDLE,
     createinfo: *mut PS_CREATE_NOTIFY_INFO,
@@ -117,6 +128,8 @@ unsafe extern "system" fn process_notify_routine(
     let eprocess = process.unwrap();
 
     GLOBAL_PROCESS_COLLECTOR.get().callback.inspect(|cb| {
+        let cb: &CB = cb.downcast_ref_unchecked();
+
         if createinfo.is_null() {
             //Process delete
             cb.on_destroy(processid);

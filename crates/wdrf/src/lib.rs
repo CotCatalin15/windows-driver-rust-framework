@@ -1,6 +1,7 @@
 #![no_std]
 #![feature(allocator_api)]
 #![feature(sync_unsafe_cell)]
+#![feature(downcast_unchecked)]
 
 pub mod context;
 pub mod logger;

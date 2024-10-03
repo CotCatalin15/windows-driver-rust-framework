@@ -3,9 +3,11 @@ use wdrf::{
     context::ContextRegistry,
     process::collector::{
         IProcessItemFactory, ItemRegistrationVerdict, ProcessCollector, ProcessInfo,
+        ProcessInfoEvent,
     },
 };
 use wdrf_std::{
+    kmalloc::TaggedObject,
     object::ArcKernelObj,
     structs::{PEPROCESS, PFILE_OBJECT},
     sync::arc::Arc,
@@ -14,8 +16,19 @@ use windows_sys::Win32::Foundation::HANDLE;
 
 struct ProcessCreateFactory {}
 
+struct TestProcessInfoItem {
+    process: ArcKernelObj<PEPROCESS>,
+    file: ArcKernelObj<PFILE_OBJECT>,
+}
+
+impl TaggedObject for TestProcessInfoItem {}
+impl ProcessInfoEvent for TestProcessInfoItem {
+    fn destroy(&self) {}
+    fn unregistered(&self) {}
+}
+
 impl IProcessItemFactory for ProcessCreateFactory {
-    type Item = (ArcKernelObj<PEPROCESS>, ArcKernelObj<PFILE_OBJECT>);
+    type Item = TestProcessInfoItem;
 
     fn create(
         &self,
@@ -36,10 +49,10 @@ impl IProcessItemFactory for ProcessCreateFactory {
 
         maple::info!("Creating process info for {} Cmd: {}", path, cmd);
 
-        Ok(ItemRegistrationVerdict::Register((
+        Ok(ItemRegistrationVerdict::Register(TestProcessInfoItem {
             process,
-            ArcKernelObj::new(*process_info.file_object.as_ref().unwrap(), true),
-        )))
+            file: ArcKernelObj::new(*process_info.file_object.as_ref().unwrap(), true),
+        }))
     }
 }
 
@@ -57,10 +70,7 @@ impl TestCollector {
         Self { collector }
     }
 
-    pub fn find_by_pid(
-        &self,
-        pid: HANDLE,
-    ) -> Option<Arc<ProcessInfo<(ArcKernelObj<PEPROCESS>, ArcKernelObj<PFILE_OBJECT>)>>> {
+    pub fn find_by_pid(&self, pid: HANDLE) -> Option<Arc<ProcessInfo<TestProcessInfoItem>>> {
         self.collector.find_by_pid(pid)
     }
 }
