@@ -10,7 +10,6 @@ use crate::{
 };
 
 pub type GuardedMutex<T> = Mutex<T, sys::mutex::GuardedMutex>;
-pub type SpinMutex<T> = Mutex<T, sys::mutex::SpinLock>;
 
 /// Its implemented using a guard mutex
 /// It can be used at IRQL <= APC
