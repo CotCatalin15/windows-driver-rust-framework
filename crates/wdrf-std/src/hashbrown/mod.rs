@@ -2,13 +2,18 @@ use allocator_api2::alloc::Allocator;
 
 pub use hashbrown::hash_map::OccupiedError;
 
-use crate::kmalloc::GlobalKernelAllocator;
+use crate::{kmalloc::GlobalKernelAllocator, traits::DispatchSafe};
 
 pub use hashbrown::hash_map::DefaultHashBuilder;
 
 #[allow(type_alias_bounds)]
 pub type HashMap<K, V, S = DefaultHashBuilder, A: Allocator = GlobalKernelAllocator> =
     hashbrown::HashMap<K, V, S, A>;
+
+unsafe impl<K: DispatchSafe, V: DispatchSafe, S, A: Allocator> DispatchSafe
+    for HashMap<K, V, S, A>
+{
+}
 
 pub trait HashMapExt<K, V, S = DefaultHashBuilder, A: Allocator = GlobalKernelAllocator> {
     fn create_in(allocator: A) -> HashMap<K, V, S, A>;

@@ -1,4 +1,4 @@
-use core::{i32, num::NonZeroU32};
+use core::num::NonZeroU32;
 
 use windows_sys::Wdk::{
     Storage::FileSystem::IO_NO_INCREMENT,

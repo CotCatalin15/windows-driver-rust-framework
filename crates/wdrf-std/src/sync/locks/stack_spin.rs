@@ -1,10 +1,17 @@
-use core::{cell::UnsafeCell, slice::SliceIndex};
+use core::cell::UnsafeCell;
 
 use windows_sys::Wdk::System::SystemServices::{
     KeAcquireInStackQueuedSpinLock, KeInitializeSpinLock, KeReleaseInStackQueuedSpinLock,
+    KLOCK_QUEUE_HANDLE,
 };
 
 use crate::traits::DispatchSafe;
+
+use super::guard::{MutexGuard, Unlockable};
+
+pub struct InStackLockHandle {
+    handle: UnsafeCell<KLOCK_QUEUE_HANDLE>,
+}
 
 pub struct StackSpinMutex<T: Send + DispatchSafe> {
     lock: UnsafeCell<usize>,
@@ -28,27 +35,63 @@ where
         }
     }
 
-    pub fn acquire<R, F: FnOnce(&T) -> R>(&self, callback: F) -> R {
+    pub fn lock<'a>(
+        &'a self,
+        handle: &'a InStackLockHandle,
+    ) -> MutexGuard<InStackSpinLockUnlocakble<'a, T>> {
         unsafe {
-            let mut handle = core::mem::zeroed();
+            self.lock_unchecked(handle);
+        }
 
-            KeAcquireInStackQueuedSpinLock(self.lock.get(), &mut handle);
-            let ret = callback(&*self.inner.get());
-            KeReleaseInStackQueuedSpinLock(&handle);
+        MutexGuard::new(InStackSpinLockUnlocakble::new(self, handle), unsafe {
+            &mut *self.inner.get()
+        })
+    }
 
-            ret
+    unsafe fn lock_unchecked<'a>(&'a self, handle: &'a InStackLockHandle) {
+        unsafe {
+            KeAcquireInStackQueuedSpinLock(self.lock.get(), &mut *handle.handle.get());
         }
     }
 
-    pub fn acquire_mut<R, F: FnOnce(&mut T) -> R>(&self, callback: F) -> R {
+    unsafe fn unlock_unchecked(&self, handle: &InStackLockHandle) {
         unsafe {
-            let mut handle = core::mem::zeroed();
+            KeReleaseInStackQueuedSpinLock(&mut *handle.handle.get());
+        }
+    }
+}
 
-            KeAcquireInStackQueuedSpinLock(self.lock.get(), &mut handle);
-            let ret = callback(&mut *self.inner.get());
-            KeReleaseInStackQueuedSpinLock(&handle);
+impl InStackLockHandle {
+    pub fn new() -> Self {
+        Self {
+            handle: unsafe { core::mem::zeroed() },
+        }
+    }
+}
 
-            ret
+pub struct InStackSpinLockUnlocakble<'a, T: Send + DispatchSafe> {
+    mutex: &'a StackSpinMutex<T>,
+    handle: &'a InStackLockHandle,
+}
+
+impl<'a, T> InStackSpinLockUnlocakble<'a, T>
+where
+    T: Send + DispatchSafe,
+{
+    pub fn new(mutex: &'a StackSpinMutex<T>, handle: &'a InStackLockHandle) -> Self {
+        Self { mutex, handle }
+    }
+}
+
+impl<'a, T> Unlockable for InStackSpinLockUnlocakble<'a, T>
+where
+    T: Send + DispatchSafe,
+{
+    type Item = T;
+
+    fn unlock(&self) {
+        unsafe {
+            self.mutex.unlock_unchecked(self.handle);
         }
     }
 }

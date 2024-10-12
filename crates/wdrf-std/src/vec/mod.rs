@@ -1,6 +1,9 @@
 use core::alloc::Allocator;
 
-use crate::kmalloc::{GlobalKernelAllocator, TaggedObject};
+use crate::{
+    kmalloc::{GlobalKernelAllocator, TaggedObject},
+    traits::DispatchSafe,
+};
 
 #[allow(type_alias_bounds)]
 pub type Vec<T, A: Allocator = GlobalKernelAllocator> = alloc::vec::Vec<T, A>;
@@ -13,6 +16,8 @@ pub trait VecCreate<T> {
         Vec::new_in(GlobalKernelAllocator::new_for_tagged::<T>())
     }
 }
+
+unsafe impl<T: DispatchSafe, A: Allocator> DispatchSafe for Vec<T, A> {}
 
 pub trait VecExt<T, A: Allocator> {
     fn try_push(&mut self, value: T) -> anyhow::Result<()>;

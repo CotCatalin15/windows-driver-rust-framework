@@ -12,7 +12,7 @@ use wdrf_std::{
     kmalloc::{GlobalKernelAllocator, MemoryTag, TaggedObject},
     sync::{
         arc::{Arc, ArcExt},
-        mutex::SpinMutex,
+        InStackLockHandle, StackSpinMutex,
     },
     sys::{
         event::{EventType, KeEvent},
@@ -33,7 +33,7 @@ const VEC_U8_TAG: MemoryTag = MemoryTag::new_from_bytes(b"logv");
 
 struct LoggerInner {
     log_event: KeEvent,
-    pending_events: SpinMutex<Vec<Vec<u8>>>,
+    pending_events: StackSpinMutex<Vec<Vec<u8>>>,
     stop: AtomicBool,
     allocator: LoggerAllocator,
 }
@@ -89,7 +89,7 @@ impl DbgPrintLogger {
 
         let inner = LoggerInner {
             log_event: unsafe { KeEvent::new() },
-            pending_events: SpinMutex::new(buffer),
+            pending_events: StackSpinMutex::new(buffer),
             stop: AtomicBool::new(false),
             allocator: LoggerAllocator::new(512),
         };
@@ -109,7 +109,8 @@ impl DbgPrintLogger {
 
     pub fn log_event(&self, writtable: DbgWritable) {
         {
-            let mut guard = self.inner.pending_events.lock();
+            let handle = InStackLockHandle::new();
+            let mut guard = self.inner.pending_events.lock(&handle);
 
             if let Err(_) = guard.try_push(writtable.buffer) {
                 return;
@@ -138,7 +139,8 @@ impl DbgPrintLogger {
             }
 
             {
-                let mut guard = logger.pending_events.lock();
+                let handle = InStackLockHandle::new();
+                let mut guard = logger.pending_events.lock(&handle);
                 core::mem::swap(guard.deref_mut(), &mut event_buffer);
                 inner.log_event.clear();
             }
@@ -158,7 +160,8 @@ impl DbgPrintLogger {
 
 impl Drop for DbgPrintLogger {
     fn drop(&mut self) {
-        let _guard = self.inner.pending_events.lock();
+        let handle = InStackLockHandle::new();
+        let _guard = self.inner.pending_events.lock(&handle);
 
         self.inner.stop.store(true, Ordering::SeqCst);
         self.inner.log_event.signal();
