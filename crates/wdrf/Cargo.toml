@@ -25,3 +25,5 @@ nt-string.workspace = true
 [features]
 default = ["minifilter"]
 minifilter = []
+
+debug-checks = ["wdrf-std/sanity-checks"]

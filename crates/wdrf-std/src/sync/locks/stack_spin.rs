@@ -5,6 +5,11 @@ use windows_sys::Wdk::System::SystemServices::{
     KLOCK_QUEUE_HANDLE,
 };
 
+#[cfg(feature = "irql-checks")]
+use windows_sys::Wdk::System::SystemServices::DISPATCH_LEVEL;
+
+use wdrf_macros::irql_check;
+
 use crate::traits::DispatchSafe;
 
 use super::guard::{MutexGuard, Unlockable};
@@ -35,6 +40,7 @@ where
         }
     }
 
+    #[cfg_attr(feature = "irql-checks", irql_check(irql = DISPATCH_LEVEL))]
     pub fn lock<'a>(
         &'a self,
         handle: &'a InStackLockHandle,

@@ -21,9 +21,8 @@ nt-string.workspace = true
 [features]
 default = ["dev-features"]
 
-dev-features = ["full-sanity-checks"]
+dev-features = ["sanity-checks"]
 
-full-sanity-checks = ["alloc-sanity", "irql-checks", "mutex-checks"]
-mutex-checks = []
+sanity-checks = ["alloc-sanity", "irql-checks"]
 irql-checks = []
 alloc-sanity = []
