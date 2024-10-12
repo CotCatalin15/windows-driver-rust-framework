@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 pub mod event;
-pub(crate) mod mutex;
+//pub(crate) mod mutex;
 pub mod semaphore;
 
 use core::time::Duration;

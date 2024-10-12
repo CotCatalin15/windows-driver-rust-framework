@@ -2,8 +2,7 @@ use nt_string::unicode_string::NtUnicodeStr;
 use wdrf::{
     context::ContextRegistry,
     process::collector::{
-        IProcessItemFactory, ItemRegistrationVerdict, ProcessCollector, ProcessInfo,
-        ProcessInfoEvent,
+        IProcessItemFactory, ItemRegistrationVerdict, ProcessCollector, ProcessInfoEvent,
     },
 };
 use wdrf_std::{
@@ -11,6 +10,7 @@ use wdrf_std::{
     object::ArcKernelObj,
     structs::{PEPROCESS, PFILE_OBJECT},
     sync::arc::Arc,
+    traits::DispatchSafe,
 };
 use windows_sys::Win32::Foundation::HANDLE;
 
@@ -20,6 +20,8 @@ struct TestProcessInfoItem {
     process: ArcKernelObj<PEPROCESS>,
     file: ArcKernelObj<PFILE_OBJECT>,
 }
+
+unsafe impl DispatchSafe for TestProcessInfoItem {}
 
 impl TaggedObject for TestProcessInfoItem {}
 impl ProcessInfoEvent for TestProcessInfoItem {
@@ -70,7 +72,7 @@ impl TestCollector {
         Self { collector }
     }
 
-    pub fn find_by_pid(&self, pid: HANDLE) -> Option<Arc<ProcessInfo<TestProcessInfoItem>>> {
+    pub fn find_by_pid(&self, pid: HANDLE) -> Option<Arc<TestProcessInfoItem>> {
         self.collector.find_by_pid(pid)
     }
 }
