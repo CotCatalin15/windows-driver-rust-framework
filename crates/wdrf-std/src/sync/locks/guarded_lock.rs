@@ -14,15 +14,15 @@ use crate::{
 
 use super::guard::{MutexGuard, Unlockable};
 
-pub struct GuardedMutex<T: Send> {
+pub struct GuardedMutex<T> {
     mutex: Box<FAST_MUTEX>,
     inner: UnsafeCell<T>,
 }
 
-impl<T> GuardedMutex<T>
-where
-    T: Send,
-{
+unsafe impl<T: Send> Send for GuardedMutex<T> {}
+unsafe impl<T: Sync> Sync for GuardedMutex<T> {}
+
+impl<T> GuardedMutex<T> {
     pub fn new(data: T) -> anyhow::Result<Self> {
         unsafe {
             let mut mutex = Box::try_create_in(
@@ -49,11 +49,13 @@ where
     }
 }
 
-pub struct GuardedUnlockable<'a, T: Send> {
+pub struct GuardedUnlockable<'a, T> {
     guard: &'a GuardedMutex<T>,
 }
 
-impl<'a, T: Send> Unlockable for GuardedUnlockable<'a, T> {
+unsafe impl<'a, T> Send for GuardedUnlockable<'a, T> where T: Send {}
+
+impl<'a, T> Unlockable for GuardedUnlockable<'a, T> {
     type Item = T;
 
     fn unlock(&self) {

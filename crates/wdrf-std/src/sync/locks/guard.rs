@@ -12,7 +12,12 @@ pub struct MutexGuard<'a, U: Unlockable> {
 }
 
 impl<'a, U: Unlockable> !Send for MutexGuard<'a, U> {}
-unsafe impl<'a, U: Unlockable> Sync for MutexGuard<'a, U> {}
+unsafe impl<'a, U> Sync for MutexGuard<'a, U>
+where
+    U: Unlockable,
+    U::Item: Sync,
+{
+}
 
 impl<'a, U> MutexGuard<'a, U>
 where
@@ -58,7 +63,12 @@ pub struct ReadMutexGuard<'a, U: Unlockable> {
 }
 
 impl<'a, U: Unlockable> !Send for ReadMutexGuard<'a, U> {}
-unsafe impl<'a, U: Unlockable> Sync for ReadMutexGuard<'a, U> {}
+unsafe impl<'a, U> Sync for ReadMutexGuard<'a, U>
+where
+    U: Unlockable,
+    U::Item: Sync,
+{
+}
 
 impl<'a, U> ReadMutexGuard<'a, U>
 where

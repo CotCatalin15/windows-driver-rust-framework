@@ -18,14 +18,14 @@ pub struct InStackLockHandle {
     handle: UnsafeCell<KLOCK_QUEUE_HANDLE>,
 }
 
-pub struct StackSpinMutex<T: Send + DispatchSafe> {
+pub struct StackSpinMutex<T: DispatchSafe> {
     lock: UnsafeCell<usize>,
     inner: UnsafeCell<T>,
 }
 
 impl<T> StackSpinMutex<T>
 where
-    T: Send + DispatchSafe,
+    T: DispatchSafe,
 {
     pub fn new(data: T) -> Self {
         let handle = unsafe {
@@ -75,14 +75,16 @@ impl InStackLockHandle {
     }
 }
 
-pub struct InStackSpinLockUnlocakble<'a, T: Send + DispatchSafe> {
+pub struct InStackSpinLockUnlocakble<'a, T: DispatchSafe> {
     mutex: &'a StackSpinMutex<T>,
     handle: &'a InStackLockHandle,
 }
 
+unsafe impl<'a, T> Send for InStackSpinLockUnlocakble<'a, T> where T: Send + DispatchSafe {}
+
 impl<'a, T> InStackSpinLockUnlocakble<'a, T>
 where
-    T: Send + DispatchSafe,
+    T: DispatchSafe,
 {
     pub fn new(mutex: &'a StackSpinMutex<T>, handle: &'a InStackLockHandle) -> Self {
         Self { mutex, handle }
@@ -91,7 +93,7 @@ where
 
 impl<'a, T> Unlockable for InStackSpinLockUnlocakble<'a, T>
 where
-    T: Send + DispatchSafe,
+    T: DispatchSafe,
 {
     type Item = T;
 

@@ -15,25 +15,24 @@ use crate::{
     boxed::{Box, BoxExt},
     constants::PoolFlags,
     kmalloc::{MemoryTag, TaggedObject},
-    traits::DispatchSafe,
     NtResult, NtResultEx, NtStatusError,
 };
 
 use super::{MutexGuard, ReadMutexGuard, Unlockable};
 
-pub struct EResource<T: Send + DispatchSafe> {
+pub struct EResource<T> {
     inner: Box<EResourceInner<T>>,
 }
 
-struct EResourceInner<T: Send + DispatchSafe> {
+unsafe impl<T: Send> Send for EResource<T> {}
+unsafe impl<T: Sync> Sync for EResource<T> {}
+
+struct EResourceInner<T> {
     resource: UnsafeCell<ERESOURCE>,
     data: UnsafeCell<T>,
 }
 
-impl<T> EResource<T>
-where
-    T: Send + DispatchSafe,
-{
+impl<T> EResource<T> {
     pub fn try_create(data: T) -> NtResult<Self> {
         let inner = Box::try_create(EResourceInner {
             resource: unsafe { core::mem::zeroed() },
@@ -74,10 +73,7 @@ where
     }
 }
 
-impl<T> TaggedObject for EResourceInner<T>
-where
-    T: Send + DispatchSafe,
-{
+impl<T> TaggedObject for EResourceInner<T> {
     fn tag() -> crate::kmalloc::MemoryTag {
         MemoryTag::new_from_bytes(b"eres")
     }
@@ -87,11 +83,13 @@ where
     }
 }
 
-pub struct EResourceUnlockable<'a, T: Send + DispatchSafe> {
+pub struct EResourceUnlockable<'a, T> {
     resource: &'a EResourceInner<T>,
 }
 
-impl<'a, T: Send + DispatchSafe> Unlockable for EResourceUnlockable<'a, T> {
+unsafe impl<'a, T> Send for EResourceUnlockable<'a, T> where T: Send {}
+
+impl<'a, T> Unlockable for EResourceUnlockable<'a, T> {
     type Item = T;
 
     fn unlock(&self) {

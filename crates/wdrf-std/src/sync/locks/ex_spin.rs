@@ -9,14 +9,17 @@ use crate::traits::DispatchSafe;
 
 use super::guard::{MutexGuard, ReadMutexGuard, Unlockable};
 
-pub struct ExSpinMutex<T: Send + DispatchSafe> {
+pub struct ExSpinMutex<T: DispatchSafe> {
     mutex: UnsafeCell<i32>,
     inner: UnsafeCell<T>,
 }
 
+unsafe impl<T: Send + DispatchSafe> Send for ExSpinMutex<T> {}
+unsafe impl<T: Sync + DispatchSafe> Sync for ExSpinMutex<T> {}
+
 impl<T> ExSpinMutex<T>
 where
-    T: Send + DispatchSafe,
+    T: DispatchSafe,
 {
     pub fn new(data: T) -> Self {
         Self {
@@ -42,18 +45,20 @@ where
     }
 }
 
-pub struct ExSpinWriteUnlockable<'a, T: Send + DispatchSafe> {
+pub struct ExSpinWriteUnlockable<'a, T: DispatchSafe> {
     guard: &'a ExSpinMutex<T>,
     old_irql: u8,
 }
 
-impl<'a, T: Send + DispatchSafe> ExSpinWriteUnlockable<'a, T> {
+unsafe impl<'a, T> Send for ExSpinWriteUnlockable<'a, T> where T: Send + DispatchSafe {}
+
+impl<'a, T: DispatchSafe> ExSpinWriteUnlockable<'a, T> {
     fn new(guard: &'a ExSpinMutex<T>, old_irql: u8) -> Self {
         Self { guard, old_irql }
     }
 }
 
-impl<'a, T: Send + DispatchSafe> Unlockable for ExSpinWriteUnlockable<'a, T> {
+impl<'a, T: DispatchSafe> Unlockable for ExSpinWriteUnlockable<'a, T> {
     type Item = T;
 
     fn unlock(&self) {
@@ -63,18 +68,20 @@ impl<'a, T: Send + DispatchSafe> Unlockable for ExSpinWriteUnlockable<'a, T> {
     }
 }
 
-pub struct ExSpinReadUnlockable<'a, T: Send + DispatchSafe> {
+pub struct ExSpinReadUnlockable<'a, T: DispatchSafe> {
     guard: &'a ExSpinMutex<T>,
     old_irql: u8,
 }
 
-impl<'a, T: Send + DispatchSafe> ExSpinReadUnlockable<'a, T> {
+unsafe impl<'a, T> Send for ExSpinReadUnlockable<'a, T> where T: Send + DispatchSafe {}
+
+impl<'a, T: DispatchSafe> ExSpinReadUnlockable<'a, T> {
     fn new(guard: &'a ExSpinMutex<T>, old_irql: u8) -> Self {
         Self { guard, old_irql }
     }
 }
 
-impl<'a, T: Send + DispatchSafe> Unlockable for ExSpinReadUnlockable<'a, T> {
+impl<'a, T: DispatchSafe> Unlockable for ExSpinReadUnlockable<'a, T> {
     type Item = T;
 
     fn unlock(&self) {
