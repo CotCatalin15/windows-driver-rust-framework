@@ -23,6 +23,9 @@ pub struct StackSpinMutex<T: DispatchSafe> {
     inner: UnsafeCell<T>,
 }
 
+unsafe impl<T: DispatchSafe> Send for StackSpinMutex<T> {}
+unsafe impl<T: DispatchSafe + Sync> Sync for StackSpinMutex<T> {}
+
 impl<T> StackSpinMutex<T>
 where
     T: DispatchSafe,
