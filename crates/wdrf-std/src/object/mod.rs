@@ -9,6 +9,7 @@ use windows_sys::Wdk::System::SystemServices::{
 use windows_sys::Win32::Foundation::{HANDLE, STATUS_OBJECT_TYPE_MISMATCH};
 
 use core::ffi::c_void;
+use core::ops::Deref;
 
 use crate::constants::{
     ExEventObjectType, ExSemaphoreObjectType, IoFileObjectType, PsProcessType, PsThreadType,
