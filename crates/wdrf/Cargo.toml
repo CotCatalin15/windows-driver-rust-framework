@@ -16,6 +16,7 @@ derive_builder.workspace = true
 widestring.workspace = true
 maple.workspace = true
 nt-string.workspace = true
+bitflags.workspace = true
 
 [dev-dependencies]
 #wdk-sys = { git = "https://github.com/CotCatalin15/windows-drivers-rs", branch = "features/minifilter-build", features = [

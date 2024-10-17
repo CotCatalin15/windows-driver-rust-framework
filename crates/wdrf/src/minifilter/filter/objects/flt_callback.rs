@@ -1,6 +1,6 @@
 use wdrf_std::{
     object::{ArcKernelObj, NonNullKrnlResource},
-    structs::PETHREAD,
+    structs::{PETHREAD, PKTHREAD},
     sync::arc::Arc,
 };
 use windows_sys::{
@@ -19,6 +19,8 @@ use super::flt_io_param::FltIoParameterBlock;
 #[repr(transparent)]
 pub struct FltCallbackData<'a>(&'a mut FLT_CALLBACK_DATA);
 
+unsafe impl<'a> Send for FltCallbackData<'a> {}
+
 pub enum FilterDataOperation {
     FastIo,
     FsFilter,
@@ -26,11 +28,11 @@ pub enum FilterDataOperation {
 }
 
 impl<'a> FltCallbackData<'a> {
-    pub(super) fn new(data: *mut FLT_CALLBACK_DATA) -> Self {
+    pub fn new(data: *mut FLT_CALLBACK_DATA) -> Self {
         Self(unsafe { &mut *data })
     }
 
-    pub fn set_data_dirty(&self) {
+    pub fn set_data_dirty(&mut self) {
         unsafe {
             FltSetCallbackDataDirty(self.0);
         }
@@ -65,23 +67,28 @@ impl<'a> FltCallbackData<'a> {
     }
 
     pub fn thread(&self) -> Option<ArcKernelObj<PETHREAD>> {
-        NonNullKrnlResource::new(self.0.Thread).map(|th| ArcKernelObj::new(th, true))
+        let pkthread: PKTHREAD = self.0.Thread as _;
+        NonNullKrnlResource::new(pkthread).map(|th| ArcKernelObj::new(th, true))
     }
 
     ///
     /// #Safety
     /// Let the minifilter framework set the status based on the return status
     ///
-    unsafe fn set_status(&self, status: NTSTATUS, information: usize) {
+    pub unsafe fn set_status(&mut self, status: NTSTATUS, information: usize) {
         self.0.IoStatus.Anonymous.Status = status;
         self.0.IoStatus.Information = information;
     }
 
-    fn requestor_mode(&self) -> i8 {
+    pub unsafe fn raw_struct(&self) -> *mut FLT_CALLBACK_DATA {
+        (self.0 as *const FLT_CALLBACK_DATA) as _
+    }
+
+    pub fn requestor_mode(&self) -> i8 {
         self.0.RequestorMode
     }
 
-    fn io_params(&self) -> FltIoParameterBlock<'a> {
+    pub fn io_params(&self) -> FltIoParameterBlock<'a> {
         FltIoParameterBlock::new(unsafe { &*self.0.Iopb })
     }
 }
@@ -100,5 +107,11 @@ impl FilterDataOperation {
         } else {
             panic!("Unknown file system operation flags");
         }
+    }
+}
+
+impl<'a> Clone for FltCallbackData<'a> {
+    fn clone(&self) -> Self {
+        unsafe { Self::new(self.raw_struct()) }
     }
 }

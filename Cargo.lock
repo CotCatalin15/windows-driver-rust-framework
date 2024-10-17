@@ -833,6 +833,7 @@ name = "wdrf"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bitflags",
  "derive_builder",
  "maple",
  "nt-string",
