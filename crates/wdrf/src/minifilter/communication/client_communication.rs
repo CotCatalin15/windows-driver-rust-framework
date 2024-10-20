@@ -14,11 +14,13 @@ use wdrf_std::{
     NtResult, NtResultEx, NtStatusError,
 };
 use windows_sys::{
-    Wdk::Storage::FileSystem::Minifilters::{FltCloseClientPort, FltSendMessage, PFLT_PORT},
+    Wdk::Storage::FileSystem::Minifilters::{
+        FltCloseClientPort, FltSendMessage, PFLT_FILTER, PFLT_PORT,
+    },
     Win32::Foundation::{NTSTATUS, STATUS_NO_MEMORY, STATUS_SUCCESS, STATUS_UNSUCCESSFUL},
 };
 
-use crate::minifilter::FltFilter;
+use crate::minifilter::filter::framework::GLOBAL_MINIFILTER;
 
 use super::{FltPort, FltPortCommunicationBuilder};
 
@@ -39,13 +41,16 @@ pub struct CommunicationInner<CB: FltCommunicationCallback> {
 }
 
 pub struct FltClient {
-    filter: FltFilter,
+    filter: PFLT_FILTER,
     port: PFLT_PORT,
 }
 
 impl FltClient {
-    pub fn new(filter: FltFilter) -> Self {
-        Self { filter, port: 0 }
+    pub fn new() -> Self {
+        Self {
+            filter: GLOBAL_MINIFILTER.get().raw_filter(),
+            port: 0,
+        }
     }
 
     fn connect(&mut self, port: PFLT_PORT) {
@@ -59,7 +64,7 @@ impl FltClient {
     fn disconnect(&mut self) {
         if self.port > 0 {
             unsafe {
-                FltCloseClientPort(self.filter.as_handle(), &mut self.port);
+                FltCloseClientPort(self.filter, &mut self.port);
             }
         }
         self.port = 0;
@@ -68,7 +73,7 @@ impl FltClient {
     pub fn send_message(&self, input: &[u8]) -> NtResult<()> {
         unsafe {
             let status = FltSendMessage(
-                self.filter.as_handle(),
+                self.filter,
                 &self.port,
                 input.as_ptr() as _,
                 input.len() as _,
@@ -90,7 +95,7 @@ impl FltClient {
         unsafe {
             let mut reply_size: u32 = reply.len() as u32;
             let status = FltSendMessage(
-                self.filter.as_handle(),
+                self.filter,
                 &self.port,
                 input.as_ptr() as _,
                 input.len() as _,
@@ -123,18 +128,18 @@ impl<CB> FltClientCommunication<CB>
 where
     CB: FltCommunicationCallback + 'static + Send + Sync,
 {
-    pub fn new(callbacks: CB, filter: FltFilter, name: NtUnicodeStr) -> NtResult<Self> {
+    pub fn new(callbacks: CB, name: NtUnicodeStr) -> NtResult<Self> {
         let mut inner = Box::try_create(CommunicationInner {
             port: None,
             callbacks,
-            client: FltClient::new(filter.clone()),
+            client: FltClient::new(),
         })
         .map_err(|_| NtStatusError::Status(STATUS_NO_MEMORY))?;
 
         let cookie = inner.as_mut();
         let cookie: *mut CommunicationInner<CB> = cookie;
 
-        let port = FltPortCommunicationBuilder::new(filter, name)
+        let port = FltPortCommunicationBuilder::new(name)
             .max_connections(NonZeroU32::new(1).unwrap())
             .cookie(NonNull::new(cookie).unwrap().cast())
             .connect(Some(flt_comm_connection::<CB>))

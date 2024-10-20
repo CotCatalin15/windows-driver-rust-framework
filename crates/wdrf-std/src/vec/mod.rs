@@ -1,14 +1,23 @@
 use core::alloc::Allocator;
 
 use crate::{
-    kmalloc::{GlobalKernelAllocator, TaggedObject},
+    constants::PoolFlags,
+    kmalloc::{GlobalKernelAllocator, MemoryTag, TaggedObject},
     traits::DispatchSafe,
 };
 
 #[allow(type_alias_bounds)]
 pub type Vec<T, A: Allocator = GlobalKernelAllocator> = alloc::vec::Vec<T, A>;
 
+pub use alloc::vec;
+
 pub trait VecCreate<T> {
+    fn create_any() -> Vec<T, GlobalKernelAllocator> {
+        Vec::new_in(GlobalKernelAllocator::new(
+            MemoryTag::new_from_bytes(b"veca"),
+            PoolFlags::POOL_FLAG_NON_PAGED,
+        ))
+    }
     fn create() -> Vec<T, GlobalKernelAllocator>
     where
         T: TaggedObject,
