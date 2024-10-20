@@ -10,17 +10,17 @@ use windows_sys::{
         Foundation::OBJECT_ATTRIBUTES,
         Storage::FileSystem::Minifilters::{
             FltCloseCommunicationPort, FltCreateCommunicationPort, PFLT_CONNECT_NOTIFY,
-            PFLT_DISCONNECT_NOTIFY, PFLT_MESSAGE_NOTIFY, PFLT_PORT,
+            PFLT_DISCONNECT_NOTIFY, PFLT_FILTER, PFLT_MESSAGE_NOTIFY, PFLT_PORT,
         },
     },
     Win32::System::Kernel::{OBJ_CASE_INSENSITIVE, OBJ_KERNEL_HANDLE},
 };
 
-use super::{security_descriptor::FltSecurityDescriptor, FltFilter};
+use super::{filter::framework::GLOBAL_MINIFILTER, security_descriptor::FltSecurityDescriptor};
 
 pub struct FltPort {
     #[allow(dead_code)]
-    filter: FltFilter,
+    filter: PFLT_FILTER,
     port: PFLT_PORT,
     max_clients: u32,
 }
@@ -35,7 +35,7 @@ impl TaggedObject for FltPort {
 }
 
 pub struct FltPortCommunicationBuilder<'a> {
-    filter: FltFilter,
+    filter: PFLT_FILTER,
     name: NtUnicodeStr<'a>,
     cookie: Option<NonNull<()>>,
     connect: PFLT_CONNECT_NOTIFY,
@@ -45,9 +45,9 @@ pub struct FltPortCommunicationBuilder<'a> {
 }
 
 impl<'a> FltPortCommunicationBuilder<'a> {
-    pub fn new(filter: FltFilter, name: NtUnicodeStr<'a>) -> Self {
+    pub fn new(name: NtUnicodeStr<'a>) -> Self {
         Self {
-            filter,
+            filter: GLOBAL_MINIFILTER.get().raw_filter(),
             name,
             cookie: None,
             connect: None,
@@ -99,7 +99,7 @@ impl<'a> FltPortCommunicationBuilder<'a> {
         };
         let status = unsafe {
             FltCreateCommunicationPort(
-                self.filter.as_handle(),
+                self.filter,
                 &mut port,
                 ptr.cast(),
                 cookie,
@@ -117,7 +117,7 @@ impl<'a> FltPortCommunicationBuilder<'a> {
 }
 
 impl FltPort {
-    fn new(filter: FltFilter, port: isize, max_clients: u32) -> Self {
+    fn new(filter: PFLT_FILTER, port: isize, max_clients: u32) -> Self {
         Self {
             filter,
             port,

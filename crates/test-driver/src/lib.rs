@@ -3,24 +3,22 @@
 use core::panic::PanicInfo;
 
 use collector::TestCollector;
-use flt_communication::{create_communication, FltCallbackImpl};
+use flt_communication::create_communication;
 use maple::consumer::{get_global_registry, set_global_consumer};
 
 use maple::info;
+use minifilter::MinifilterPreOperation;
 use wdrf::context::{Context, ContextRegistry, FixedGlobalContextRegistry};
 use wdrf::logger::DbgPrintLogger;
-use wdrf::minifilter::communication::client_communication::FltClientCommunication;
-use wdrf::minifilter::structs::IRP_MJ_OPERATION_END;
-use wdrf::minifilter::{FltFilter, FltOperationRegistrationSlice, FltRegistrationBuilder};
-use wdrf_std::constants::PoolFlags;
-use wdrf_std::dbg_break;
-use wdrf_std::kmalloc::{GlobalKernelAllocator, MemoryTag};
-use windows_sys::Wdk::Foundation::DRIVER_OBJECT;
-use windows_sys::Wdk::Storage::FileSystem::Minifilters::{
-    FltGetRequestorProcessId, FLT_CALLBACK_DATA, FLT_OPERATION_REGISTRATION,
-    FLT_POSTOP_CALLBACK_STATUS, FLT_POSTOP_FINISHED_PROCESSING, FLT_PREOP_CALLBACK_STATUS,
-    FLT_PREOP_COMPLETE, FLT_RELATED_OBJECTS,
+use wdrf::minifilter::filter::framework::MinifilterFramework;
+use wdrf::minifilter::filter::registration::{FltOperationEntry, FltOperationType};
+use wdrf::minifilter::filter::{
+    EmptyFltOperationsVisitor, FilterOperationVisitor, MinifilterFrameworkBuilder, UnloadStatus,
 };
+use wdrf_std::constants::PoolFlags;
+use wdrf_std::kmalloc::{GlobalKernelAllocator, MemoryTag, TaggedObject};
+use wdrf_std::{dbg_break, vec};
+use windows_sys::Wdk::Foundation::DRIVER_OBJECT;
 use windows_sys::Wdk::System::SystemServices::KeBugCheckEx;
 use windows_sys::Win32::Foundation::{
     NTSTATUS, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING,
@@ -28,6 +26,7 @@ use windows_sys::Win32::Foundation::{
 
 mod collector;
 mod flt_communication;
+mod minifilter;
 
 #[global_allocator]
 static KERNEL_GLOBAL_ALLOCATOR: GlobalKernelAllocator = GlobalKernelAllocator::new(
@@ -72,45 +71,6 @@ pub unsafe extern "system" fn driver_entry(
     }
 }
 
-#[allow(dead_code)]
-unsafe extern "system" fn pre_op(
-    data: *mut FLT_CALLBACK_DATA,
-    _fltobjects: *const FLT_RELATED_OBJECTS,
-    _completioncontext: *mut *mut core::ffi::c_void,
-) -> FLT_PREOP_CALLBACK_STATUS {
-    //SimRepGetIoOpenDriverRegistryKey
-    FltGetRequestorProcessId(data);
-    FLT_PREOP_COMPLETE
-}
-
-#[allow(dead_code)]
-unsafe extern "system" fn post_op(
-    _data: *mut FLT_CALLBACK_DATA,
-    _fltobjects: *const FLT_RELATED_OBJECTS,
-    _completioncontext: *const core::ffi::c_void,
-    _flags: u32,
-) -> FLT_POSTOP_CALLBACK_STATUS {
-    FLT_POSTOP_FINISHED_PROCESSING
-}
-
-static FLT_OPS: Option<FltOperationRegistrationSlice<1>> = FltOperationRegistrationSlice::new([
-    /*  FLT_OPERATION_REGISTRATION {
-        MajorFunction: IRP_MJ_CREATE as _,
-        Flags: 0,
-        PreOperation: Some(pre_op),
-        PostOperation: Some(post_op),
-        Reserved1: core::ptr::null_mut(),
-    },
-    */
-    FLT_OPERATION_REGISTRATION {
-        MajorFunction: IRP_MJ_OPERATION_END as _,
-        Flags: 0,
-        PreOperation: None,
-        PostOperation: None,
-        Reserved1: core::ptr::null_mut(),
-    },
-]);
-
 static LOGGER_CONTEXT: Context<DbgPrintLogger> = Context::uninit();
 
 fn init_logger() {
@@ -128,6 +88,22 @@ fn init_logger() {
     set_global_consumer(LOGGER_CONTEXT.get());
 }
 
+struct MinifilterUnload {}
+impl TaggedObject for MinifilterUnload {}
+
+impl FilterOperationVisitor for MinifilterUnload {
+    fn unload(&self, mandatory: bool) -> wdrf::minifilter::filter::UnloadStatus {
+        dbg_break();
+
+        info!(name = "Unload", "Unloading callback called");
+
+        get_global_registry().disable_consumer();
+        CONTEXT_REGISTRY.drop_self();
+
+        UnloadStatus::Unload
+    }
+}
+
 fn driver_main(
     driver: &mut DRIVER_OBJECT,
     _registry_path: &'static UNICODE_STRING,
@@ -138,18 +114,14 @@ fn driver_main(
 
     info!(name = "Driver entry", "Initializing driver");
 
-    /*
-        let registration = FltRegistrationBuilder::new()
-            .unload(Some(minifilter_unload))
-            .operations(FLT_OPS.as_ref().unwrap().get())
-            .build()?;
-        let filter = registration
-            .register_filter(driver)
-            .map_err(|_| anyhow::Error::msg("Failed to register filter"))?;
+    MinifilterFrameworkBuilder::new(MinifilterPreOperation {})
+        .operations(&[FltOperationEntry::new(FltOperationType::Create, 0, false)])
+        .post(EmptyFltOperationsVisitor {})
+        .filter(MinifilterUnload {}, true)
+        .build_and_register(&CONTEXT_REGISTRY, driver)?;
 
-        let comm = create_communication(filter.clone())
-            .map_err(|_| anyhow::Error::msg("Failed to create communication"))?;
-    */
+    let comm =
+        create_communication().map_err(|_| anyhow::Error::msg("Failed to create communication"))?;
 
     driver.DriverUnload = Some(driver_unload);
 
@@ -158,18 +130,14 @@ fn driver_main(
     })?;
     let context = DRIVER_CONTEXT.get();
 
+    unsafe {
+        MinifilterFramework::start_filtering().unwrap();
+    }
+
     Ok(())
 }
 
 pub unsafe extern "system" fn driver_unload() {
     get_global_registry().disable_consumer();
     CONTEXT_REGISTRY.drop_self();
-}
-
-pub unsafe extern "system" fn minifilter_unload(_flags: u32) -> NTSTATUS {
-    info!(name = "Unload", "Unloading callback called");
-
-    get_global_registry().disable_consumer();
-    CONTEXT_REGISTRY.drop_self();
-    STATUS_SUCCESS
 }

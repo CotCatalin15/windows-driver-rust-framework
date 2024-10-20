@@ -1,7 +1,6 @@
 use wdrf_std::{
     object::{ArcKernelObj, NonNullKrnlResource},
     structs::{PETHREAD, PKTHREAD},
-    sync::arc::Arc,
 };
 use windows_sys::{
     Wdk::Storage::FileSystem::Minifilters::{
@@ -21,6 +20,7 @@ pub struct FltCallbackData<'a>(&'a mut FLT_CALLBACK_DATA);
 
 unsafe impl<'a> Send for FltCallbackData<'a> {}
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum FilterDataOperation {
     FastIo,
     FsFilter,
@@ -107,11 +107,5 @@ impl FilterDataOperation {
         } else {
             panic!("Unknown file system operation flags");
         }
-    }
-}
-
-impl<'a> Clone for FltCallbackData<'a> {
-    fn clone(&self) -> Self {
-        unsafe { Self::new(self.raw_struct()) }
     }
 }

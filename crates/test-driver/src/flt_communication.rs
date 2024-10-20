@@ -1,6 +1,5 @@
-use wdrf::minifilter::{
-    communication::client_communication::{FltClientCommunication, FltCommunicationCallback},
-    FltFilter,
+use wdrf::minifilter::communication::client_communication::{
+    FltClientCommunication, FltCommunicationCallback,
 };
 use wdrf_std::{dbg_break, io::Write, slice::tracked_slice::TrackedSlice, NtResult};
 
@@ -36,10 +35,8 @@ impl FltCommunicationCallback for FltCallbackImpl {
     }
 }
 
-pub fn create_communication(
-    filter: FltFilter,
-) -> NtResult<FltClientCommunication<FltCallbackImpl>> {
+pub fn create_communication() -> NtResult<FltClientCommunication<FltCallbackImpl>> {
     let port_name = nt_string::nt_unicode_str!("\\TESTPORT");
 
-    FltClientCommunication::new(FltCallbackImpl {}, filter, port_name)
+    FltClientCommunication::new(FltCallbackImpl {}, port_name)
 }
