@@ -112,6 +112,8 @@ fn driver_main(
 
     init_logger();
 
+    //driver.DriverUnload = Some(driver_unload);
+
     info!(name = "Driver entry", "Initializing driver");
 
     MinifilterFrameworkBuilder::new(MinifilterPreOperation {})
@@ -139,5 +141,6 @@ fn driver_main(
 
 pub unsafe extern "system" fn driver_unload() {
     get_global_registry().disable_consumer();
+
     CONTEXT_REGISTRY.drop_self();
 }

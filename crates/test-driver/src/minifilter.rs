@@ -1,6 +1,9 @@
 use nt_string::unicode_string::NtUnicodeStr;
 use wdrf::minifilter::filter::{PreOpStatus, PreOperationVisitor};
-use wdrf_std::kmalloc::TaggedObject;
+use wdrf_std::{kmalloc::TaggedObject, nt_success};
+use windows_sys::Wdk::Storage::FileSystem::Minifilters::{
+    FltGetFileNameInformation, FltReleaseFileNameInformation, FLT_FILE_NAME_NORMALIZED,
+};
 
 pub struct MinifilterPreOperation {}
 
@@ -14,14 +17,26 @@ impl PreOperationVisitor for MinifilterPreOperation {
         let file_object = data.io_params().file_object();
 
         if let Some(file_object) = file_object {
-            let name = unsafe { &(*file_object.as_raw_obj()).FileName };
+            unsafe {
+                let mut ptr_file_name_info = core::ptr::null_mut();
+                let status = FltGetFileNameInformation(
+                    data.raw_struct(),
+                    FLT_FILE_NAME_NORMALIZED,
+                    &mut ptr_file_name_info,
+                );
+                if nt_success(status) == false {
+                    return PreOpStatus::SuccessNoCallback;
+                }
 
-            if name.Length > 0 && name.Buffer != core::ptr::null_mut() {
+                let fname_info = &*ptr_file_name_info;
+                let name = &fname_info.Name;
                 let name = unsafe {
                     NtUnicodeStr::from_raw_parts(name.Buffer, name.Length, name.MaximumLength)
                 };
 
                 maple::info!("Create new file name: {name}");
+
+                FltReleaseFileNameInformation(ptr_file_name_info);
             }
         }
 

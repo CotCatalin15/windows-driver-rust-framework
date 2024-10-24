@@ -54,11 +54,12 @@ impl MinifilterFramework {
         NtResult::from_status(status, || ())
     }
 
-    pub fn unregister(&self) {
+    pub fn unregister() {
         unsafe {
-            if *self.filter.get() != 0 {
-                FltUnregisterFilter(*self.filter.get());
-                *self.filter.get() = 0;
+            let framework = GLOBAL_MINIFILTER.get();
+            if *framework.filter.get() != 0 {
+                FltUnregisterFilter(*framework.filter.get());
+                *framework.filter.get() = 0;
             }
         }
     }
@@ -70,6 +71,6 @@ impl MinifilterFramework {
 
 impl Drop for MinifilterFramework {
     fn drop(&mut self) {
-        self.unregister();
+        Self::unregister();
     }
 }
