@@ -71,6 +71,7 @@ impl<const SIZE: usize> ContextRegistry for FixedGlobalContextRegistry<SIZE> {
                 elem.assume_init().context_drop();
             }
         }
+        inner.size.store(0, Ordering::SeqCst);
     }
 }
 

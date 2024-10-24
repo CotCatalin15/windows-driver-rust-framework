@@ -90,6 +90,12 @@ impl<Factory: IProcessItemFactory> ProcessCollector<Factory> {
     }
 }
 
+impl<Factory: IProcessItemFactory> Drop for ProcessCollector<Factory> {
+    fn drop(&mut self) {
+        let _ = self.stop();
+    }
+}
+
 struct ProcessCollectorInner<Factory: IProcessItemFactory + Sized> {
     factory: Factory,
     process_map: ExSpinMutex<HashMap<isize, Arc<Factory::Item>>>,
