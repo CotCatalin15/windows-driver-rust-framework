@@ -125,8 +125,6 @@ fn driver_main(
     let comm =
         create_communication().map_err(|_| anyhow::Error::msg("Failed to create communication"))?;
 
-    driver.DriverUnload = Some(driver_unload);
-
     DRIVER_CONTEXT.init(&CONTEXT_REGISTRY, move || TestDriverContext {
         collector: TestCollector::new(&CONTEXT_REGISTRY),
     })?;
