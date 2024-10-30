@@ -47,7 +47,7 @@ where
     pub fn lock<'a>(
         &'a self,
         handle: &'a InStackLockHandle,
-    ) -> MutexGuard<InStackSpinLockUnlocakble<'a, T>> {
+    ) -> MutexGuard<'a, InStackSpinLockUnlocakble<'a, T>> {
         unsafe {
             self.lock_unchecked(handle);
         }
