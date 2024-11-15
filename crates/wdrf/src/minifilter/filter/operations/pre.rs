@@ -1,19 +1,20 @@
 use core::any::Any;
 
-use wdrf_std::boxed::Box;
 use windows_sys::Win32::Foundation::NTSTATUS;
 
 use crate::minifilter::filter::{
-    params::{FltCreateRequest, FltQueryFileRequest},
+    params::{FltCreateRequest, FltQueryFileRequest, FltReadFileRequest},
     FltCallbackData, FltRelatedObjects,
 };
+
+use super::PostOpContext;
 
 pub enum PreOpStatus {
     Complete(NTSTATUS),
     DisalowFastIO,
     Pending,
     SuccessNoCallback,
-    SuccessWithCallback(Option<Box<dyn Any>>),
+    SuccessWithCallback(Option<PostOpContext<dyn Any>>),
     Sync,
     DisallowFsFilterIo,
 }
@@ -34,6 +35,15 @@ pub trait PreOperationVisitor: 'static + Send + Sync {
         data: FltCallbackData<'a>,
         related_obj: FltRelatedObjects<'a>,
         query: FltQueryFileRequest<'a>,
+    ) -> PreOpStatus {
+        PreOpStatus::SuccessNoCallback
+    }
+
+    fn read<'a>(
+        &self,
+        data: FltCallbackData<'a>,
+        related_obj: FltRelatedObjects<'a>,
+        read: FltReadFileRequest<'a>,
     ) -> PreOpStatus {
         PreOpStatus::SuccessNoCallback
     }

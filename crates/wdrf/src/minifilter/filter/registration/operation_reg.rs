@@ -2,13 +2,14 @@ use windows_sys::Wdk::{
     Storage::FileSystem::Minifilters::{
         FLT_OPERATION_REGISTRATION, PFLT_POST_OPERATION_CALLBACK, PFLT_PRE_OPERATION_CALLBACK,
     },
-    System::SystemServices::{IRP_MJ_CREATE, IRP_MJ_QUERY_INFORMATION},
+    System::SystemServices::{IRP_MJ_CREATE, IRP_MJ_QUERY_INFORMATION, IRP_MJ_READ},
 };
 
 use crate::minifilter::{
     filter::{
         flt_op_callbacks::{
-            flt_create_pre_op_implementation, flt_query_information_pre_op_implementation,
+            flt_create_post_op_implementation, flt_create_pre_op_implementation,
+            flt_query_information_pre_op_implementation, flt_read_pre_op_implementation,
         },
         PostOperationVisitor, PreOperationVisitor,
     },
@@ -19,6 +20,7 @@ use crate::minifilter::{
 pub enum FltOperationType {
     Create,
     Query,
+    Read,
 }
 
 pub struct FltOperationEntry {
@@ -65,6 +67,7 @@ impl FltOperationType {
         match self {
             FltOperationType::Create => IRP_MJ_CREATE as _,
             FltOperationType::Query => IRP_MJ_QUERY_INFORMATION as _,
+            FltOperationType::Read => IRP_MJ_READ as _,
         }
     }
 
@@ -72,6 +75,7 @@ impl FltOperationType {
         match self {
             FltOperationType::Create => Some(flt_create_pre_op_implementation::<V>),
             FltOperationType::Query => Some(flt_query_information_pre_op_implementation::<V>),
+            FltOperationType::Read => Some(flt_read_pre_op_implementation::<V>),
         }
     }
 
@@ -79,8 +83,9 @@ impl FltOperationType {
         self,
     ) -> PFLT_POST_OPERATION_CALLBACK {
         match self {
-            FltOperationType::Create => todo!(),
+            FltOperationType::Create => Some(flt_create_post_op_implementation::<V>),
             FltOperationType::Query => todo!(),
+            FltOperationType::Read => todo!(),
         }
     }
 }

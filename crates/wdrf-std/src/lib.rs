@@ -10,6 +10,7 @@ use windows_sys::Win32::Foundation::NTSTATUS;
 
 extern crate alloc;
 
+pub mod aligned;
 pub mod boxed;
 pub mod collections;
 pub mod constants;

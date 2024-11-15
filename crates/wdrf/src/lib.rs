@@ -5,6 +5,7 @@
 
 pub mod context;
 pub mod logger;
+pub mod mm;
 pub mod process;
 
 #[cfg(feature = "minifilter")]
