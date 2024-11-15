@@ -116,8 +116,13 @@ fn driver_main(
 
     info!(name = "Driver entry", "Initializing driver");
 
+    let flt_operations = [
+        FltOperationEntry::new(FltOperationType::Create, 0, false),
+        FltOperationEntry::new(FltOperationType::Read, 0, false),
+    ];
+
     MinifilterFrameworkBuilder::new(MinifilterPreOperation {})
-        .operations(&[FltOperationEntry::new(FltOperationType::Create, 0, false)])
+        .operations(&flt_operations)
         .post(EmptyFltOperationsVisitor {})
         .filter(MinifilterUnload {}, true)
         .build_and_register(&CONTEXT_REGISTRY, driver)?;
