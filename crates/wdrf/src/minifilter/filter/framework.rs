@@ -10,11 +10,11 @@ use windows_sys::Wdk::{
 
 use crate::context::Context;
 
-use super::{FilterOperationVisitor, PostOperationVisitor, PreOperationVisitor};
+use super::{FilterOperationVisitor, FltPostOpCallback, FltPreOpCallback};
 
 pub struct MinifilterFramework {
-    pub(crate) pre_operations: Box<dyn PreOperationVisitor>,
-    pub(crate) post_operations: Box<dyn PostOperationVisitor>,
+    pub(crate) pre_operations: Box<dyn FltPreOpCallback>,
+    pub(crate) post_operations: Box<dyn FltPostOpCallback>,
     pub(crate) filter_operations: Box<dyn FilterOperationVisitor>,
     pub(crate) filter: UnsafeCell<PFLT_FILTER>,
 }
@@ -26,8 +26,8 @@ pub(crate) static GLOBAL_MINIFILTER: Context<MinifilterFramework> = Context::uni
 
 impl MinifilterFramework {
     pub(crate) fn new(
-        pre_operations: Box<dyn PreOperationVisitor>,
-        post_operations: Box<dyn PostOperationVisitor>,
+        pre_operations: Box<dyn FltPreOpCallback>,
+        post_operations: Box<dyn FltPostOpCallback>,
         filter_operations: Box<dyn FilterOperationVisitor>,
     ) -> Self {
         Self {

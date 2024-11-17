@@ -4,7 +4,7 @@ use super::{
     flt_op_callbacks::flt_minifilter_unload_implementation,
     framework::{MinifilterFramework, GLOBAL_MINIFILTER},
     registration::FltOperationEntry,
-    EmptyFltOperationsVisitor, FilterOperationVisitor, PostOperationVisitor, PreOperationVisitor,
+    EmptyFltOperationsVisitor, FilterOperationVisitor, FltPostOpCallback, FltPreOpCallback,
 };
 use wdrf_std::{
     boxed::{Box, BoxExt},
@@ -20,8 +20,8 @@ use windows_sys::Wdk::{
 
 pub struct MinifilterFrameworkBuilder<
     'a,
-    Pre: PreOperationVisitor,
-    Post: PostOperationVisitor = EmptyFltOperationsVisitor,
+    Pre: FltPreOpCallback,
+    Post: FltPostOpCallback = EmptyFltOperationsVisitor,
     FilterV: FilterOperationVisitor = EmptyFltOperationsVisitor,
 > {
     pre_visitor: Pre,
@@ -35,8 +35,8 @@ pub struct MinifilterFrameworkBuilder<
 
 impl<'a, Pre, Post, FilterV> MinifilterFrameworkBuilder<'a, Pre, Post, FilterV>
 where
-    Pre: PreOperationVisitor + TaggedObject,
-    Post: PostOperationVisitor + TaggedObject,
+    Pre: FltPreOpCallback + TaggedObject,
+    Post: FltPostOpCallback + TaggedObject,
     FilterV: FilterOperationVisitor + TaggedObject,
 {
     pub fn new(pre: Pre) -> Self {
@@ -109,7 +109,7 @@ where
         */
 
         let preops = Box::try_create(self.pre_visitor)?;
-        let postops: Box<dyn PostOperationVisitor> = if let Some(post) = self.post_visitor {
+        let postops: Box<dyn FltPostOpCallback> = if let Some(post) = self.post_visitor {
             Box::try_create(post)?
         } else {
             Box::try_create(EmptyFltOperationsVisitor {})?

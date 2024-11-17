@@ -5,8 +5,6 @@ use wdrf_std::slice::slice_from_raw_parts_mut_or_empty;
 use windows_sys::Wdk::Foundation::MDL;
 use windows_sys::Wdk::Storage::FileSystem::Minifilters::FLT_PARAMETERS;
 
-use crate::mm::Mdl;
-
 #[repr(C)]
 #[allow(non_snake_case)]
 struct FltReadParameter {

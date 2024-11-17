@@ -4,6 +4,7 @@ use windows_sys::Wdk::{
 };
 
 // TODO: In a galaxy far, far away... bitflags! {} was used, and no one returned raw u16/u32 flags again.
+
 pub struct FltCreateRequest<'a> {
     create_params: &'a mut FLT_PARAMETERS_4,
 }
