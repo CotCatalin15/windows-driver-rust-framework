@@ -7,7 +7,7 @@ use flt_communication::create_communication;
 use maple::consumer::{get_global_registry, set_global_consumer};
 
 use maple::info;
-use minifilter::MinifilterPreOperation;
+use minifilter::MinifilterOperations;
 use wdrf::context::{Context, ContextRegistry, FixedGlobalContextRegistry};
 use wdrf::logger::DbgPrintLogger;
 use wdrf::minifilter::filter::framework::MinifilterFramework;
@@ -121,7 +121,7 @@ fn driver_main(
         FltOperationEntry::new(FltOperationType::Read, 0, false),
     ];
 
-    MinifilterFrameworkBuilder::new(MinifilterPreOperation {})
+    MinifilterFrameworkBuilder::new(MinifilterOperations {})
         .operations(&flt_operations)
         .post(EmptyFltOperationsVisitor {})
         .filter(MinifilterUnload {}, true)

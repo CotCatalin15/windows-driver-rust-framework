@@ -1,17 +1,12 @@
 use windows_sys::Wdk::{
-    Storage::FileSystem::Minifilters::{
-        FLT_OPERATION_REGISTRATION, PFLT_POST_OPERATION_CALLBACK, PFLT_PRE_OPERATION_CALLBACK,
-    },
+    Storage::FileSystem::Minifilters::FLT_OPERATION_REGISTRATION,
     System::SystemServices::{IRP_MJ_CREATE, IRP_MJ_QUERY_INFORMATION, IRP_MJ_READ},
 };
 
 use crate::minifilter::{
     filter::{
-        flt_op_callbacks::{
-            flt_create_post_op_implementation, flt_create_pre_op_implementation,
-            flt_query_information_pre_op_implementation, flt_read_pre_op_implementation,
-        },
-        PostOperationVisitor, PreOperationVisitor,
+        flt_op_callbacks::{generic_post_op_callback, generic_pre_op_callback},
+        FltPostOpCallback, FltPreOpCallback,
     },
     structs::IRP_MJ_OPERATION_END,
 };
@@ -38,15 +33,15 @@ impl FltOperationEntry {
         }
     }
 
-    pub unsafe fn convert_to_registry<Pre: PreOperationVisitor, Post: PostOperationVisitor>(
+    pub unsafe fn convert_to_registry<Pre: FltPreOpCallback, Post: FltPostOpCallback>(
         &self,
     ) -> FLT_OPERATION_REGISTRATION {
         FLT_OPERATION_REGISTRATION {
             MajorFunction: self.op.as_irp_mj(),
             Flags: self.flags,
-            PreOperation: self.op.as_pre_op_callback::<Pre>(),
+            PreOperation: Some(generic_pre_op_callback::<Pre>),
             PostOperation: if self.post_op {
-                self.op.as_post_op_callback::<Post>()
+                Some(generic_post_op_callback::<Post>)
             } else {
                 None
             },
@@ -71,21 +66,12 @@ impl FltOperationType {
         }
     }
 
-    pub unsafe fn as_pre_op_callback<V: PreOperationVisitor>(self) -> PFLT_PRE_OPERATION_CALLBACK {
-        match self {
-            FltOperationType::Create => Some(flt_create_pre_op_implementation::<V>),
-            FltOperationType::Query => Some(flt_query_information_pre_op_implementation::<V>),
-            FltOperationType::Read => Some(flt_read_pre_op_implementation::<V>),
-        }
-    }
-
-    pub unsafe fn as_post_op_callback<V: PostOperationVisitor>(
-        self,
-    ) -> PFLT_POST_OPERATION_CALLBACK {
-        match self {
-            FltOperationType::Create => Some(flt_create_post_op_implementation::<V>),
-            FltOperationType::Query => todo!(),
-            FltOperationType::Read => todo!(),
+    pub fn from_irp_mj(irp_mj: u8) -> Self {
+        match irp_mj as u32 {
+            IRP_MJ_CREATE => FltOperationType::Create,
+            IRP_MJ_QUERY_INFORMATION => FltOperationType::Query,
+            IRP_MJ_READ => FltOperationType::Read,
+            _ => panic!("Unknown irp mj"),
         }
     }
 }

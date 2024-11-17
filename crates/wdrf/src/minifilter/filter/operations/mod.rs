@@ -16,9 +16,35 @@ use wdrf_std::{
 pub struct EmptyFltOperationsVisitor {}
 unsafe impl DispatchSafe for EmptyFltOperationsVisitor {}
 
-impl PreOperationVisitor for EmptyFltOperationsVisitor {}
-impl PostOperationVisitor for EmptyFltOperationsVisitor {}
-impl FilterOperationVisitor for EmptyFltOperationsVisitor {}
+impl FltPreOpCallback for EmptyFltOperationsVisitor {
+    fn callback<'a>(
+        &self,
+        _data: super::FltCallbackData<'a>,
+        _related_obj: super::FltRelatedObjects<'a>,
+        _params: super::params::FltParameters<'a>,
+    ) -> PreOpStatus {
+        PreOpStatus::SuccessNoCallback
+    }
+}
+
+impl FltPostOpCallback for EmptyFltOperationsVisitor {
+    fn callback<'a>(
+        &self,
+        _data: super::FltCallbackData<'a>,
+        _related_obj: super::FltRelatedObjects<'a>,
+        _params: super::params::FltParameters<'a>,
+        _context: Option<PostOpContext<dyn core::any::Any>>,
+        _draining: bool,
+    ) -> PostOpStatus {
+        PostOpStatus::FinishProcessing
+    }
+}
+
+impl FilterOperationVisitor for EmptyFltOperationsVisitor {
+    fn unload(&self, _mandatory: bool) -> UnloadStatus {
+        UnloadStatus::Unload
+    }
+}
 
 impl TaggedObject for EmptyFltOperationsVisitor {
     fn tag() -> wdrf_std::kmalloc::MemoryTag {

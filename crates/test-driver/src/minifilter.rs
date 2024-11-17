@@ -1,38 +1,44 @@
 use nt_string::unicode_string::NtUnicodeStr;
-use wdrf::minifilter::filter::{FileNameInformation, PreOpStatus, PreOperationVisitor};
+use wdrf::minifilter::filter::{
+    params::{FltCreateRequest, FltParameters},
+    FileNameInformation, FltPreOpCallback, PreOpStatus,
+};
 use wdrf_std::{kmalloc::TaggedObject, nt_success};
-use windows_sys::Wdk::Storage::FileSystem::Minifilters::{
-    FltGetFileNameInformation, FltReleaseFileNameInformation, FLT_FILE_NAME_NORMALIZED,
+use windows_sys::{
+    Wdk::Storage::FileSystem::Minifilters::{
+        FltGetFileNameInformation, FltReleaseFileNameInformation, FLT_FILE_NAME_NORMALIZED,
+    },
+    Win32::Foundation::STATUS_ACCESS_DENIED,
 };
 
-pub struct MinifilterPreOperation {}
+pub struct MinifilterOperations {}
 
-impl PreOperationVisitor for MinifilterPreOperation {
-    fn create<'a>(
+impl FltPreOpCallback for MinifilterOperations {
+    fn callback<'a>(
         &self,
         data: wdrf::minifilter::filter::FltCallbackData<'a>,
         related_obj: wdrf::minifilter::filter::FltRelatedObjects<'a>,
-        create: wdrf::minifilter::filter::params::FltCreateRequest<'a>,
-    ) -> wdrf::minifilter::filter::PreOpStatus {
-        PreOpStatus::SuccessNoCallback
-    }
-
-    fn read<'a>(
-        &self,
-        data: wdrf::minifilter::filter::FltCallbackData<'a>,
-        related_obj: wdrf::minifilter::filter::FltRelatedObjects<'a>,
-        read: wdrf::minifilter::filter::params::FltReadFileRequest<'a>,
+        params: FltParameters<'a>,
     ) -> PreOpStatus {
-        if let Ok(info) = FileNameInformation::create(&data) {
-            let name = info.name();
-            maple::info!(
-                "Read file info: {name}, buffer: {:?}",
-                read.read_buffer().as_ptr()
-            );
-        }
+        match params {
+            FltParameters::Create(create) => {
+                let name = FileNameInformation::create(&data);
 
-        PreOpStatus::SuccessNoCallback
+                if let Ok(name) = name {
+                    let slice = name.name().as_u16str().as_slice();
+                    let a_txt = widestring::u16str!("a.txt").as_slice();
+                    if slice.windows(a_txt.len()).any(|window| window == a_txt) {
+                        PreOpStatus::Complete(STATUS_ACCESS_DENIED, 0)
+                    } else {
+                        PreOpStatus::SuccessNoCallback
+                    }
+                } else {
+                    PreOpStatus::SuccessNoCallback
+                }
+            }
+            _ => PreOpStatus::SuccessNoCallback,
+        }
     }
 }
 
-impl TaggedObject for MinifilterPreOperation {}
+impl TaggedObject for MinifilterOperations {}

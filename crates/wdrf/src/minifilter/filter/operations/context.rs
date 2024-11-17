@@ -1,5 +1,5 @@
 use core::{
-    any::{self, Any},
+    any::Any,
     ops::{Deref, DerefMut},
 };
 
