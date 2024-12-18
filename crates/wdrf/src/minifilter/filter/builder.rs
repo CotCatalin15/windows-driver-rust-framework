@@ -95,8 +95,8 @@ where
         registration.FilterUnloadCallback = self
             .set_unload
             .then_some(flt_minifilter_unload_implementation::<FilterV>);
-        /*
         registration.InstanceSetupCallback = self.instance_setup;
+        /*
         registration.InstanceQueryTeardownCallback = self.instance_query_teardown;
         registration.InstanceTeardownCompleteCallback = self.instance_teardown;
         registration.InstanceTeardownStartCallback = self.instance_teardown_start;

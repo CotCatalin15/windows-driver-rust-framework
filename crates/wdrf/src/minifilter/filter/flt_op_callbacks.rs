@@ -10,13 +10,22 @@ use windows_sys::{
         FLT_PREOP_SUCCESS_NO_CALLBACK, FLT_PREOP_SUCCESS_WITH_CALLBACK, FLT_PREOP_SYNCHRONIZE,
         FLT_RELATED_OBJECTS,
     },
-    Win32::Foundation::{NTSTATUS, STATUS_FLT_DO_NOT_DETACH, STATUS_SUCCESS},
+    Win32::{
+        Foundation::{
+            NTSTATUS, STATUS_FLT_DO_NOT_ATTACH, STATUS_FLT_DO_NOT_DETACH, STATUS_SUCCESS,
+        },
+        Storage::{
+            FileSystem::{FILE_DEVICE_CD_ROM, FILE_DEVICE_DISK},
+            InstallableFileSystems::FLT_FILESYSTEM_TYPE,
+        },
+    },
 };
 
 use super::{
     framework::GLOBAL_MINIFILTER, params::FltParameters, registration::FltOperationType,
-    FilterDataOperation, FilterOperationVisitor, FltCallbackData, FltPostOpCallback,
-    FltPreOpCallback, FltRelatedObjects, PostOpContext, PostOpStatus, PreOpStatus,
+    FilterDataOperation, FilterOperationVisitor, FltCallbackData, FltDeviceType, FltPostOpCallback,
+    FltPreOpCallback, FltRelatedObjects, FltVolumeType, InstanceSetupStatus, PostOpContext,
+    PostOpStatus, PreOpStatus,
 };
 
 pub unsafe extern "system" fn generic_pre_op_callback<'a, V>(
@@ -139,5 +148,33 @@ where
                 STATUS_FLT_DO_NOT_DETACH
             }
         }
+    }
+}
+
+pub unsafe extern "system" fn flt_minifilter_instance_setup(
+    fltobjects: *const FLT_RELATED_OBJECTS,
+    flags: u32,
+    volumedevicetype: u32,
+    volumefilesystemtype: FLT_FILESYSTEM_TYPE,
+) -> NTSTATUS {
+    let device_type = match volumedevicetype {
+        FILE_DEVICE_CD_ROM => FltDeviceType::CdRom,
+        FILE_DEVICE_DISK => FltDeviceType::Disk,
+        0x00000014 => FltDeviceType::Network,
+        _ => panic!("Unknown device type received: {volumedevicetype}"),
+    };
+
+    let fs_type = FltVolumeType::try_from(volumefilesystemtype).expect("Uknown filesystem type");
+
+    let result = GLOBAL_MINIFILTER.get().filter_operations.instance_setup(
+        FltRelatedObjects::new(fltobjects),
+        flags,
+        device_type,
+        fs_type,
+    );
+
+    match result {
+        InstanceSetupStatus::Success => STATUS_SUCCESS,
+        InstanceSetupStatus::DoNotAttach => STATUS_FLT_DO_NOT_ATTACH,
     }
 }
