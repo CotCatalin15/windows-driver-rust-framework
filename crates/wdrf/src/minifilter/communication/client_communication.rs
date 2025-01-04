@@ -70,7 +70,7 @@ impl FltClient {
         self.port = 0;
     }
 
-    pub fn send_message(&self, input: &[u8]) -> NtResult<()> {
+    pub fn send_message(&self, input: &[u8], timeout: Timeout) -> NtResult<()> {
         unsafe {
             let status = FltSendMessage(
                 self.filter,
@@ -79,7 +79,7 @@ impl FltClient {
                 input.len() as _,
                 core::ptr::null_mut(),
                 core::ptr::null_mut(),
-                core::ptr::null(),
+                timeout.as_ptr(),
             );
 
             NtResult::from_status(status, || {})
@@ -152,8 +152,8 @@ where
         Ok(Self { inner })
     }
 
-    pub fn send_message(&self, input: &[u8]) -> NtResult<()> {
-        self.inner.client.send_message(input)
+    pub fn send_message(&self, input: &[u8], timeout: Timeout) -> NtResult<()> {
+        self.inner.client.send_message(input, timeout)
     }
 
     pub fn send_message_with_reply<'a>(
