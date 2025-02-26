@@ -1,11 +1,15 @@
 use core::alloc::Allocator;
 
-use crate::kmalloc::{GlobalKernelAllocator, TaggedObject};
+use crate::{
+    kmalloc::{GlobalKernelAllocator, TaggedObject},
+    traits::DispatchSafe,
+};
 
 #[allow(type_alias_bounds)]
 pub type VecDeque<T, A: Allocator = GlobalKernelAllocator> =
     alloc::collections::vec_deque::VecDeque<T, A>;
 
+unsafe impl<T: DispatchSafe, A: Allocator> DispatchSafe for VecDeque<T, A> {}
 pub trait VecDequeExt<T> {
     fn try_push_back(&mut self, value: T) -> anyhow::Result<()>;
     fn try_push_front(&mut self, value: T) -> anyhow::Result<()>;

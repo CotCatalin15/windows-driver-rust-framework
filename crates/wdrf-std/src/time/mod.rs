@@ -1,5 +1,7 @@
 use core::time::Duration;
 
+use windows_sys::Wdk::System::SystemServices::KeQuerySystemTimePrecise;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Timeout {
     timeout: Option<i64>,
@@ -32,5 +34,45 @@ impl Timeout {
         } else {
             core::ptr::null()
         }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct SystemTime {
+    time: u64,
+}
+
+impl SystemTime {
+    pub fn new() -> Self {
+        Self {
+            time: Self::get_precise(),
+        }
+    }
+
+    pub fn update(&mut self) {
+        self.time = Self::get_precise();
+    }
+
+    pub fn raw_time(&self) -> u64 {
+        self.time
+    }
+
+    #[inline]
+    pub fn elapsed_raw(&self) -> u64 {
+        Self::get_precise() - self.time
+    }
+
+    #[inline]
+    pub fn elapsed_duration(&self) -> Duration {
+        Duration::from_nanos(self.elapsed_raw() * 100)
+    }
+
+    fn get_precise() -> u64 {
+        let mut time: u64 = 0;
+        unsafe {
+            let ptr_time: *mut u64 = &mut time;
+            KeQuerySystemTimePrecise(ptr_time as _);
+        }
+        return time;
     }
 }

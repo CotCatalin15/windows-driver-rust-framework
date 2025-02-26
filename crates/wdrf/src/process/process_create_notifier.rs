@@ -2,7 +2,7 @@ use core::any::Any;
 
 use wdrf_std::object::{ArcKernelObj, NonNullKrnlResource};
 use wdrf_std::NtResultEx;
-use wdrf_std::{structs::PEPROCESS, NtResult};
+use wdrf_std::{structs::PKPROCESS, NtResult};
 use windows_sys::Wdk::System::SystemServices::{
     PsSetCreateProcessNotifyRoutineEx, PCREATE_PROCESS_NOTIFY_ROUTINE_EX, PS_CREATE_NOTIFY_INFO,
 };
@@ -24,7 +24,7 @@ pub trait PsCreateNotifyCallback: Any + Send + Sync + 'static {
     //Return the create result for the process
     fn on_create(
         &self,
-        process: ArcKernelObj<PEPROCESS>,
+        process: ArcKernelObj<PKPROCESS>,
         pid: HANDLE,
         process_info: &PsCreateNotifyInfo,
     ) -> NtResult<()>;
@@ -118,7 +118,7 @@ unsafe extern "system" fn process_notify_routine<CB: PsCreateNotifyCallback>(
     processid: HANDLE,
     createinfo: *mut PS_CREATE_NOTIFY_INFO,
 ) {
-    let process: PEPROCESS = process_as_isize as *mut _;
+    let process: PKPROCESS = process_as_isize as *mut _;
     let process = NonNullKrnlResource::new(process);
 
     if process.is_none() {
