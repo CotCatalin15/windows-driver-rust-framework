@@ -19,15 +19,13 @@ use super::{
     FltRelatedObjects, PostOpContext, PostOpStatus, PreOpStatus,
 };
 
-pub unsafe extern "system" fn generic_pre_op_callback<'a, Pre, C, PostContext>(
+pub unsafe extern "system" fn generic_pre_op_callback<'a, Pre>(
     data: *mut FLT_CALLBACK_DATA,
     fltobjects: *const FLT_RELATED_OBJECTS,
     completioncontext: *mut *mut core::ffi::c_void,
 ) -> FLT_PREOP_CALLBACK_STATUS
 where
-    C: 'static + Send + Sync + Sized,
-    PostContext: 'static + Send + Sync + TaggedObject,
-    Pre: FltPreOpCallback<'a, C, PostContext>,
+    Pre: FltPreOpCallback<'a>,
 {
     let params: *const FLT_PARAMETERS = &(*(*data).Iopb).Parameters;
     let params: *mut FLT_PARAMETERS = params as _;
@@ -38,8 +36,8 @@ where
         params,
     );
 
-    let status = Pre::call(
-        MinifilterFramework::context::<C>(),
+    let status = Pre::call_pre(
+        MinifilterFramework::context(),
         FltCallbackData::new(data),
         FltRelatedObjects::new(fltobjects),
         params,
@@ -62,7 +60,7 @@ where
         PreOpStatus::SuccessNoCallback => FLT_PREOP_SUCCESS_NO_CALLBACK,
         PreOpStatus::SuccessWithCallback(any) => {
             if let Some(context) = any {
-                let leak: *mut PostContext = PostOpContext::leak(context);
+                let leak: *mut Pre::PostContext = PostOpContext::leak(context);
                 *completioncontext = leak as _;
             } else {
                 *completioncontext = core::ptr::null_mut();
@@ -75,16 +73,14 @@ where
     }
 }
 
-pub unsafe extern "system" fn generic_post_op_callback<'a, Post, C, PostContext>(
+pub unsafe extern "system" fn generic_post_op_callback<'a, Post>(
     data: *mut FLT_CALLBACK_DATA,
     fltobjects: *const FLT_RELATED_OBJECTS,
     completioncontext: *const core::ffi::c_void,
     flags: u32,
 ) -> FLT_POSTOP_CALLBACK_STATUS
 where
-    C: 'static + Send + Sync + Sized,
-    PostContext: 'static + Send + Sync + TaggedObject,
-    Post: FltPostOpCallback<'a, C, PostContext>,
+    Post: FltPostOpCallback<'a>,
 {
     let params: *const FLT_PARAMETERS = &(*(*data).Iopb).Parameters;
     let params: *mut FLT_PARAMETERS = params as _;
@@ -98,7 +94,7 @@ where
     let context = if completioncontext.is_null() {
         None
     } else {
-        let context: *mut PostContext = (completioncontext as *mut core::ffi::c_void) as _;
+        let context: *mut Post::PostContext = (completioncontext as *mut core::ffi::c_void) as _;
         let context = PostOpContext::from_raw_ptr(context);
 
         Some(context)
@@ -106,8 +102,8 @@ where
 
     let draining = (flags & FLTFL_POST_OPERATION_DRAINING) == FLTFL_POST_OPERATION_DRAINING;
 
-    let status = Post::call(
-        MinifilterFramework::context::<C>(),
+    let status = Post::call_post(
+        MinifilterFramework::context(),
         FltCallbackData::new(data),
         FltRelatedObjects::new(fltobjects),
         params,
@@ -121,14 +117,13 @@ where
     }
 }
 
-pub unsafe extern "system" fn flt_minifilter_unload_implementation<F, C>(flags: u32) -> NTSTATUS
+pub unsafe extern "system" fn flt_minifilter_unload_implementation<F>(flags: u32) -> NTSTATUS
 where
-    F: FilterUnload<C>,
-    C: Sized + 'static + Send + Sync,
+    F: FilterUnload,
 {
     let mandatory = (flags & FLTFL_FILTER_UNLOAD_MANDATORY) == FLTFL_FILTER_UNLOAD_MANDATORY;
 
-    let context = MinifilterFramework::context::<C>();
+    let context = MinifilterFramework::context();
     let result = F::call(context, mandatory);
 
     //let result = GLOBAL_MINIFILTER.get().filter_operations.unload(mandatory);

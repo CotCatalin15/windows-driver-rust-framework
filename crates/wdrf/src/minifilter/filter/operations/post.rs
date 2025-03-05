@@ -4,7 +4,7 @@ use wdrf_std::kmalloc::TaggedObject;
 
 use crate::minifilter::filter::{params::FltParameters, FltCallbackData, FltRelatedObjects};
 
-use super::PostOpContext;
+use super::{FltPreOpCallback, PostOpContext};
 
 #[derive(Debug, Clone, Copy)]
 pub enum PostOpStatus {
@@ -12,17 +12,13 @@ pub enum PostOpStatus {
     PendProcessing,
 }
 
-pub trait FltPostOpCallback<'a, C, PostContext>
-where
-    C: 'static + Sized + Sync + Send,
-    PostContext: 'static + Send + Sync + TaggedObject,
-{
-    fn call(
-        minifilter_context: &'static C,
+pub trait FltPostOpCallback<'a>: FltPreOpCallback<'a> {
+    fn call_post(
+        minifilter_context: &'static Self::MinifilterContext,
         data: FltCallbackData<'a>,
         related_obj: FltRelatedObjects<'a>,
         params: FltParameters<'a>,
-        context: Option<PostOpContext<PostContext>>,
+        context: Option<PostOpContext<Self::PostContext>>,
         draining: bool,
     ) -> PostOpStatus;
 }
