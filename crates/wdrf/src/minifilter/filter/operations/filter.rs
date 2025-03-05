@@ -19,19 +19,23 @@ pub enum FltDeviceType {
     Network,
 }
 
-#[allow(unused_variables)]
-pub trait FilterOperationVisitor: Send + Sync + 'static {
-    fn instance_setup<'a>(
-        &self,
-        related: FltRelatedObjects<'a>,
-        flags: u32,
-        device_type: FltDeviceType,
-        volume_type: FltVolumeType,
-    ) -> InstanceSetupStatus {
-        InstanceSetupStatus::Success
-    }
+pub trait FilterUnload<C>
+where
+    C: 'static + Sized + Sync + Send,
+{
+    fn call(minifilter_context: &'static C, mandatory: bool) -> UnloadStatus;
+}
 
-    fn unload(&self, mandatory: bool) -> UnloadStatus {
-        UnloadStatus::Unload
-    }
+#[macro_export]
+macro_rules! fn_flt_unload {
+    ($fn_name:ident($minifilter_context:ident: $t1:ty, $mandatory:ident: $t2:ty) $body:block) => {
+        struct $fn_name;
+
+        impl FilterUnload<C> for $fn_name
+        where
+            C: 'static + Sized + Sync + Send,
+            {
+                fn call($minifilter_context: $t1, $mandatory: $t2) $body
+            }
+    };
 }

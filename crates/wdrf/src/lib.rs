@@ -2,6 +2,7 @@
 #![feature(allocator_api)]
 #![feature(sync_unsafe_cell)]
 #![feature(downcast_unchecked)]
+#![feature(trait_alias)]
 
 pub mod context;
 pub mod logger;

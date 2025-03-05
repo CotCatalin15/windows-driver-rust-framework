@@ -1,6 +1,13 @@
-use core::cell::UnsafeCell;
+use core::{any::Any, cell::UnsafeCell};
 
-use wdrf_std::{boxed::Box, NtResult, NtResultEx};
+use wdrf_std::kmalloc::TaggedObject;
+use wdrf_std::{
+    boxed::{Box, BoxExt},
+    NtResult, NtResultEx, NtStatusError,
+};
+
+use windows_sys::Win32::Foundation::STATUS_NO_MEMORY;
+
 use windows_sys::Wdk::{
     Foundation::DRIVER_OBJECT,
     Storage::FileSystem::Minifilters::{
@@ -9,13 +16,54 @@ use windows_sys::Wdk::{
 };
 
 use crate::context::Context;
+use wdrf_std::traits::DispatchSafe;
 
-use super::{FilterOperationVisitor, FltPostOpCallback, FltPreOpCallback};
+pub struct MinifilterContext<C: ?Sized + 'static + Send + Sync> {
+    pub(crate) context: Box<C>,
+}
+
+unsafe impl<C: ?Sized + 'static + Send + Sync> Send for MinifilterContext<C> {}
+unsafe impl<C: ?Sized + 'static + Send + Sync> Sync for MinifilterContext<C> {}
+unsafe impl<C: ?Sized + 'static + Send + Sync + DispatchSafe> DispatchSafe
+    for MinifilterContext<C>
+{
+}
+
+pub type MinifilterContextAny = MinifilterContext<dyn Any + 'static + Send + Sync>;
+
+impl<C> MinifilterContext<C>
+where
+    C: 'static + Send + Sync + TaggedObject + Any,
+{
+    pub fn try_create(context: C) -> NtResult<Self> {
+        let context =
+            Box::try_create(context).map_err(|_| NtStatusError::Status(STATUS_NO_MEMORY))?;
+
+        Ok(Self { context })
+    }
+}
+
+impl<C> MinifilterContext<C>
+where
+    C: 'static + Send + Sync + Any,
+{
+    pub(crate) fn into_any(self) -> MinifilterContextAny {
+        MinifilterContext {
+            context: self.context,
+        }
+    }
+}
+
+impl MinifilterContextAny {
+    pub(crate) fn cast_ref_unsafe<C: Send + Sync + 'static>(
+        context: &'static MinifilterContextAny,
+    ) -> &'static C {
+        unsafe { context.context.downcast_ref_unchecked::<C>() }
+    }
+}
 
 pub struct MinifilterFramework {
-    pub(crate) pre_operations: Box<dyn FltPreOpCallback>,
-    pub(crate) post_operations: Box<dyn FltPostOpCallback>,
-    pub(crate) filter_operations: Box<dyn FilterOperationVisitor>,
+    pub(crate) minifilter_context: MinifilterContextAny,
     pub(crate) filter: UnsafeCell<PFLT_FILTER>,
 }
 
@@ -25,15 +73,9 @@ unsafe impl Sync for MinifilterFramework {}
 pub(crate) static GLOBAL_MINIFILTER: Context<MinifilterFramework> = Context::uninit();
 
 impl MinifilterFramework {
-    pub(crate) fn new(
-        pre_operations: Box<dyn FltPreOpCallback>,
-        post_operations: Box<dyn FltPostOpCallback>,
-        filter_operations: Box<dyn FilterOperationVisitor>,
-    ) -> Self {
+    pub(crate) fn new(context: MinifilterContextAny) -> Self {
         Self {
-            pre_operations,
-            post_operations,
-            filter_operations,
+            minifilter_context: context,
             filter: UnsafeCell::new(0),
         }
     }
@@ -66,6 +108,21 @@ impl MinifilterFramework {
 
     pub fn raw_filter(&self) -> PFLT_FILTER {
         unsafe { *self.filter.get() }
+    }
+
+    pub(crate) fn context<C>() -> &'static C
+    where
+        C: Sized + 'static + Send + Sync,
+    {
+        let context = unsafe {
+            GLOBAL_MINIFILTER
+                .get()
+                .minifilter_context
+                .context
+                .downcast_ref_unchecked::<C>()
+        };
+
+        context
     }
 }
 

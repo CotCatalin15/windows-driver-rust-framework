@@ -3,13 +3,7 @@ use windows_sys::Wdk::{
     System::SystemServices::{IRP_MJ_CREATE, IRP_MJ_QUERY_INFORMATION, IRP_MJ_READ},
 };
 
-use crate::minifilter::{
-    filter::{
-        flt_op_callbacks::{generic_post_op_callback, generic_pre_op_callback},
-        FltPostOpCallback, FltPreOpCallback,
-    },
-    structs::IRP_MJ_OPERATION_END,
-};
+use crate::minifilter::structs::IRP_MJ_OPERATION_END;
 
 #[derive(Debug, Clone, Copy)]
 pub enum FltOperationType {
@@ -20,31 +14,20 @@ pub enum FltOperationType {
 
 pub struct FltOperationEntry {
     op: FltOperationType,
-    post_op: bool,
     flags: u32,
 }
 
 impl FltOperationEntry {
-    pub fn new(op: FltOperationType, flags: u32, has_post: bool) -> Self {
-        Self {
-            op,
-            post_op: has_post,
-            flags,
-        }
+    pub fn new(op: FltOperationType, flags: u32) -> Self {
+        Self { op, flags }
     }
 
-    pub unsafe fn convert_to_registry<Pre: FltPreOpCallback, Post: FltPostOpCallback>(
-        &self,
-    ) -> FLT_OPERATION_REGISTRATION {
+    pub fn convert_to_registry(&self) -> FLT_OPERATION_REGISTRATION {
         FLT_OPERATION_REGISTRATION {
             MajorFunction: self.op.as_irp_mj(),
             Flags: self.flags,
-            PreOperation: Some(generic_pre_op_callback::<Pre>),
-            PostOperation: if self.post_op {
-                Some(generic_post_op_callback::<Post>)
-            } else {
-                None
-            },
+            PreOperation: None,
+            PostOperation: None,
             Reserved1: core::ptr::null_mut(),
         }
     }
