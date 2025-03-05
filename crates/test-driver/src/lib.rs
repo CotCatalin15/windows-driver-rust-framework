@@ -88,8 +88,11 @@ struct MinifilterUnload;
 
 struct TestMinifilterCb;
 
-impl<'a> FltPreOpCallback<'a, u32, u32> for TestMinifilterCb {
-    fn call(
+impl<'a> FltPreOpCallback<'a> for TestMinifilterCb {
+    type MinifilterContext = u32;
+    type PostContext = u32;
+
+    fn call_pre(
         minifilter_context: &'a u32,
         data: FltCallbackData<'a>,
         related_obj: FltRelatedObjects<'a>,
@@ -101,8 +104,8 @@ impl<'a> FltPreOpCallback<'a, u32, u32> for TestMinifilterCb {
     }
 }
 
-impl<'a> FltPostOpCallback<'a, u32, u32> for TestMinifilterCb {
-    fn call(
+impl<'a> FltPostOpCallback<'a> for TestMinifilterCb {
+    fn call_post(
         minifilter_context: &'static u32,
         data: FltCallbackData<'a>,
         related_obj: FltRelatedObjects<'a>,
@@ -137,13 +140,7 @@ fn driver_main(
 
     let entries = [FltOperationEntry::new(FltOperationType::Create, 0)];
     MinifilterFrameworkBuilder::new_with_context(
-        || {
-            MinifilterOperationBuilder::new().operation_with_postop(
-                TestMinifilterCb,
-                TestMinifilterCb,
-                &entries,
-            )
-        },
+        || MinifilterOperationBuilder::new().operation_with_postop(TestMinifilterCb, &entries),
         100u32,
     )
     .unload(MinifilterUnload)
@@ -163,8 +160,10 @@ fn driver_main(
     Ok(())
 }
 
-impl FilterUnload<u32> for MinifilterUnload {
-    fn call(minifilter_context: &'static u32, mandatory: bool) -> UnloadStatus {
+impl FilterUnload for MinifilterUnload {
+    type MinifilterContext = u32;
+
+    fn call(minifilter_context: &'static Self::MinifilterContext, mandatory: bool) -> UnloadStatus {
         info!("Minifilter unload");
 
         get_global_registry().disable_consumer();

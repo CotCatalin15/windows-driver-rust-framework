@@ -1,3 +1,5 @@
+use core::marker::PhantomData;
+
 use wdrf_std::{
     constants::PoolFlags,
     kmalloc::{GlobalKernelAllocator, MemoryTag, TaggedObject},
@@ -14,31 +16,32 @@ use crate::minifilter::filter::{
 use super::IntoFltOpRegistrationFactory;
 use crate::minifilter::structs::IRP_MJ_OPERATION_END;
 
-pub struct MinifilterOperationBuilder {
+pub struct MinifilterOperationBuilder<C> {
     registration: Vec<FLT_OPERATION_REGISTRATION>,
+    _data: PhantomData<C>,
 }
 
-impl MinifilterOperationBuilder {
+impl<C> MinifilterOperationBuilder<C>
+where
+    C: 'static + Send + Sync,
+{
     pub fn new() -> Self {
         Self {
             registration: Vec::new_in(GlobalKernelAllocator::new(
                 MemoryTag::new_from_bytes(b"opre"),
                 PoolFlags::POOL_FLAG_NON_PAGED,
             )),
+            _data: PhantomData,
         }
     }
 
-    pub fn preop<'a, Pre, C: Sized + 'static + Send + Sync>(
-        mut self,
-        preop: Pre,
-        entries: &[FltOperationEntry],
-    ) -> Self
+    pub fn preop<'a, Pre>(mut self, preop: Pre, entries: &[FltOperationEntry]) -> Self
     where
-        Pre: FltPreOpCallback<'a, C, ()>,
+        Pre: FltPreOpCallback<'a, MinifilterContext = C, PostContext = ()>,
     {
         for entry in entries {
             self.registration.push(FLT_OPERATION_REGISTRATION {
-                PreOperation: Some(generic_pre_op_callback::<'a, Pre, C, ()>),
+                PreOperation: Some(generic_pre_op_callback::<'a, Pre>),
                 PostOperation: None,
                 ..entry.convert_to_registry()
             });
@@ -47,21 +50,18 @@ impl MinifilterOperationBuilder {
         self
     }
 
-    pub fn operation_with_postop<'a, Pre, Post, C: Sized + 'static + Send + Sync, PostContext>(
+    pub fn operation_with_postop<'a, Post>(
         mut self,
-        _preop: Pre,
         _postop: Post,
         entries: &[FltOperationEntry],
     ) -> Self
     where
-        Pre: FltPreOpCallback<'a, C, PostContext>,
-        Post: FltPostOpCallback<'a, C, PostContext>,
-        PostContext: 'static + Send + Sync + TaggedObject,
+        Post: FltPostOpCallback<'a, MinifilterContext = C>,
     {
         for entry in entries {
             self.registration.push(FLT_OPERATION_REGISTRATION {
-                PreOperation: Some(generic_pre_op_callback::<'a, Pre, C, PostContext>),
-                PostOperation: Some(generic_post_op_callback::<'a, Post, C, PostContext>),
+                PreOperation: Some(generic_pre_op_callback::<'a, Post>),
+                PostOperation: Some(generic_post_op_callback::<'a, Post>),
                 ..entry.convert_to_registry()
             });
         }
@@ -70,7 +70,12 @@ impl MinifilterOperationBuilder {
     }
 }
 
-impl IntoFltOpRegistrationFactory for MinifilterOperationBuilder {
+impl<C> IntoFltOpRegistrationFactory for MinifilterOperationBuilder<C>
+where
+    C: 'static + Send + Sync,
+{
+    type MinifilterContext = C;
+
     fn into_operations(
         &mut self,
     ) -> &[windows_sys::Wdk::Storage::FileSystem::Minifilters::FLT_OPERATION_REGISTRATION] {

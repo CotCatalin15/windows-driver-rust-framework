@@ -7,5 +7,7 @@ pub use operation_factory::*;
 use windows_sys::Wdk::Storage::FileSystem::Minifilters::FLT_OPERATION_REGISTRATION;
 
 pub trait IntoFltOpRegistrationFactory {
+    type MinifilterContext: 'static + Send + Sync;
+
     fn into_operations(&mut self) -> &[FLT_OPERATION_REGISTRATION];
 }

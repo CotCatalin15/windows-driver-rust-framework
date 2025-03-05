@@ -40,7 +40,7 @@ where
 
 impl<I> MinifilterFrameworkBuilder<I, ()>
 where
-    I: IntoFltOpRegistrationFactory,
+    I: IntoFltOpRegistrationFactory<MinifilterContext = ()>,
 {
     pub fn new<F>(factory: F) -> Self
     where
@@ -58,8 +58,8 @@ where
 
 impl<I, C> MinifilterFrameworkBuilder<I, C>
 where
-    I: IntoFltOpRegistrationFactory,
     C: 'static + Send + Sync + TaggedObject + Any,
+    I: IntoFltOpRegistrationFactory<MinifilterContext = C>,
 {
     pub fn new_with_context<F>(factory: F, context: C) -> Self
     where
@@ -74,8 +74,8 @@ where
         }
     }
 
-    pub fn unload<F: FilterUnload<C>>(mut self, _unload: F) -> Self {
-        self.unload = Some(flt_minifilter_unload_implementation::<F, C>);
+    pub fn unload<F: FilterUnload<MinifilterContext = C>>(mut self, _unload: F) -> Self {
+        self.unload = Some(flt_minifilter_unload_implementation::<F>);
         self
     }
 

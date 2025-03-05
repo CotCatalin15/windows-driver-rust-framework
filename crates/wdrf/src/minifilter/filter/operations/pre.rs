@@ -17,15 +17,14 @@ pub enum PreOpStatus<C: 'static + Send + Sync + TaggedObject> {
     DisallowFsFilterIo,
 }
 
-pub trait FltPreOpCallback<'a, C, PostContext>
-where
-    C: 'static + Sized + Sync + Send,
-    PostContext: 'static + Sized + Sync + Send + TaggedObject,
-{
-    fn call(
-        minifilter_context: &'a C,
+pub trait FltPreOpCallback<'a> {
+    type MinifilterContext: 'static + Sized + Sync + Send;
+    type PostContext: 'static + Sized + Sync + Send + TaggedObject;
+
+    fn call_pre(
+        minifilter_context: &'a Self::MinifilterContext,
         data: FltCallbackData<'a>,
         related_obj: FltRelatedObjects<'a>,
         params: FltParameters<'a>,
-    ) -> PreOpStatus<PostContext>;
+    ) -> PreOpStatus<Self::PostContext>;
 }

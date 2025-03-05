@@ -19,11 +19,10 @@ pub enum FltDeviceType {
     Network,
 }
 
-pub trait FilterUnload<C>
-where
-    C: 'static + Sized + Sync + Send,
-{
-    fn call(minifilter_context: &'static C, mandatory: bool) -> UnloadStatus;
+pub trait FilterUnload {
+    type MinifilterContext: 'static + Sized + Sync + Send;
+
+    fn call(minifilter_context: &'static Self::MinifilterContext, mandatory: bool) -> UnloadStatus;
 }
 
 #[macro_export]
