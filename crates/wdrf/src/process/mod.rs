@@ -1,12 +1,10 @@
 mod structs;
 
-use core::alloc::Layout;
-
 pub use structs::*;
 use wdrf_std::{
     boxed::{Box, BoxExt},
     constants::PoolFlags,
-    kmalloc::{alloc, GlobalKernelAllocator, MemoryTag},
+    kmalloc::{GlobalKernelAllocator, MemoryTag},
     nt_success,
     object::{ArcKernelObj, NonNullKrnlResource},
     structs::{PEPROCESS, PKPROCESS},
