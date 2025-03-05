@@ -1,15 +1,8 @@
-use nt_string::unicode_string::NtUnicodeStr;
 use wdrf::minifilter::filter::{
-    params::{FltCreateRequest, FltParameters},
-    FileNameInformation, FltPreOpCallback, PreOpStatus,
+    params::FltParameters, FileNameInformation, FltPreOpCallback, PreOpStatus,
 };
 use wdrf_std::{kmalloc::TaggedObject, nt_success};
-use windows_sys::{
-    Wdk::Storage::FileSystem::Minifilters::{
-        FltGetFileNameInformation, FltReleaseFileNameInformation, FLT_FILE_NAME_NORMALIZED,
-    },
-    Win32::Foundation::STATUS_ACCESS_DENIED,
-};
+use windows_sys::Win32::Foundation::STATUS_ACCESS_DENIED;
 
 pub struct MinifilterOperations {}
 

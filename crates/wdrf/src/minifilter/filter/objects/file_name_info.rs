@@ -3,7 +3,8 @@ use wdrf_std::{NtResult, NtResultEx};
 use windows_sys::Wdk::Storage::FileSystem::Minifilters::{
     FltGetFileNameInformation, FltReleaseFileNameInformation, FLTFL_FILE_NAME_PARSED_EXTENSION,
     FLTFL_FILE_NAME_PARSED_FINAL_COMPONENT, FLTFL_FILE_NAME_PARSED_PARENT_DIR,
-    FLTFL_FILE_NAME_PARSED_STREAM, FLT_FILE_NAME_INFORMATION, FLT_FILE_NAME_OPENED,
+    FLTFL_FILE_NAME_PARSED_STREAM, FLT_FILE_NAME_INFORMATION, FLT_FILE_NAME_NORMALIZED,
+    FLT_FILE_NAME_OPENED, FLT_FILE_NAME_QUERY_DEFAULT,
 };
 
 use super::FltCallbackData;
@@ -20,7 +21,11 @@ impl FileNameInformation {
     pub fn create(data: &FltCallbackData) -> NtResult<Self> {
         let mut file_info = core::ptr::null_mut();
         let status = unsafe {
-            FltGetFileNameInformation(data.raw_struct() as _, FLT_FILE_NAME_OPENED, &mut file_info)
+            FltGetFileNameInformation(
+                data.raw_struct() as _,
+                FLT_FILE_NAME_QUERY_DEFAULT | FLT_FILE_NAME_NORMALIZED,
+                &mut file_info,
+            )
         };
 
         NtResult::from_status(status, || Self {
