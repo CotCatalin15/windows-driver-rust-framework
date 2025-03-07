@@ -1,15 +1,17 @@
 use windows_sys::Wdk::{
     Storage::FileSystem::Minifilters::FLT_OPERATION_REGISTRATION,
-    System::SystemServices::{IRP_MJ_CREATE, IRP_MJ_QUERY_INFORMATION, IRP_MJ_READ},
+    System::SystemServices::{IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_READ, IRP_MJ_WRITE},
 };
 
 use crate::minifilter::structs::IRP_MJ_OPERATION_END;
 
-#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FltOperationType {
-    Create,
-    Query,
-    Read,
+    Create = IRP_MJ_CREATE as _,
+    Read = IRP_MJ_READ as _,
+    Write = IRP_MJ_WRITE as _,
+    Close = IRP_MJ_CLOSE as _,
 }
 
 pub struct FltOperationEntry {
@@ -22,9 +24,9 @@ impl FltOperationEntry {
         Self { op, flags }
     }
 
-    pub fn convert_to_registry(&self) -> FLT_OPERATION_REGISTRATION {
+    pub(crate) fn convert_to_registry(&self) -> FLT_OPERATION_REGISTRATION {
         FLT_OPERATION_REGISTRATION {
-            MajorFunction: self.op.as_irp_mj(),
+            MajorFunction: self.op as u8,
             Flags: self.flags,
             PreOperation: None,
             PostOperation: None,
@@ -32,29 +34,10 @@ impl FltOperationEntry {
         }
     }
 
-    pub unsafe fn create_end_entry() -> FLT_OPERATION_REGISTRATION {
+    pub(crate) unsafe fn create_end_entry() -> FLT_OPERATION_REGISTRATION {
         FLT_OPERATION_REGISTRATION {
             MajorFunction: IRP_MJ_OPERATION_END as _,
             ..core::mem::zeroed()
-        }
-    }
-}
-
-impl FltOperationType {
-    pub fn as_irp_mj(self) -> u8 {
-        match self {
-            FltOperationType::Create => IRP_MJ_CREATE as _,
-            FltOperationType::Query => IRP_MJ_QUERY_INFORMATION as _,
-            FltOperationType::Read => IRP_MJ_READ as _,
-        }
-    }
-
-    pub fn from_irp_mj(irp_mj: u8) -> Self {
-        match irp_mj as u32 {
-            IRP_MJ_CREATE => FltOperationType::Create,
-            IRP_MJ_QUERY_INFORMATION => FltOperationType::Query,
-            IRP_MJ_READ => FltOperationType::Read,
-            _ => panic!("Unknown irp mj"),
         }
     }
 }

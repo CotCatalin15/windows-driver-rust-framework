@@ -2,6 +2,8 @@ use core::time::Duration;
 
 use windows_sys::Wdk::System::SystemServices::KeQuerySystemTimePrecise;
 
+use crate::kmalloc::{MemoryTag, TaggedObject};
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Timeout {
     timeout: Option<i64>,
@@ -38,8 +40,15 @@ impl Timeout {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(transparent)]
 pub struct SystemTime {
     time: u64,
+}
+
+impl TaggedObject for SystemTime {
+    fn tag() -> crate::kmalloc::MemoryTag {
+        MemoryTag::new_from_bytes(b"syst")
+    }
 }
 
 impl SystemTime {

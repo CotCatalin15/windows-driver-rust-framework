@@ -55,6 +55,7 @@ where
 }
 
 impl MinifilterContextAny {
+    #[allow(dead_code)]
     pub(crate) fn cast_ref_unsafe<C: Send + Sync + 'static>(
         context: &'static MinifilterContextAny,
     ) -> &'static C {

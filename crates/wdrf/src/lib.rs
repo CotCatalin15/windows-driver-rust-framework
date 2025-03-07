@@ -3,9 +3,11 @@
 #![feature(sync_unsafe_cell)]
 #![feature(downcast_unchecked)]
 #![feature(trait_alias)]
+#![feature(box_into_inner)]
 
 pub mod context;
 pub mod logger;
+pub mod macros;
 pub mod mm;
 pub mod process;
 

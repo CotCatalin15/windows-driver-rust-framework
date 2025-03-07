@@ -1,6 +1,3 @@
-use core::any::Any;
-
-use wdrf_std::kmalloc::TaggedObject;
 use windows_sys::{
     Wdk::Storage::FileSystem::Minifilters::{
         FLTFL_FILTER_UNLOAD_MANDATORY, FLTFL_POST_OPERATION_DRAINING, FLT_CALLBACK_DATA,
@@ -29,12 +26,13 @@ where
 {
     let params: *const FLT_PARAMETERS = &(*(*data).Iopb).Parameters;
     let params: *mut FLT_PARAMETERS = params as _;
+
+    let irp_mj = (*(*data).Iopb).MajorFunction;
+    let irp_mj = core::mem::transmute::<u8, FltOperationType>(irp_mj);
+
     #[allow(invalid_reference_casting)]
     let params = &mut *params;
-    let params = FltParameters::new(
-        FltOperationType::from_irp_mj((*(*data).Iopb).MajorFunction),
-        params,
-    );
+    let params = FltParameters::new(irp_mj, params);
 
     let status = Pre::call_pre(
         MinifilterFramework::context(),
@@ -84,12 +82,13 @@ where
 {
     let params: *const FLT_PARAMETERS = &(*(*data).Iopb).Parameters;
     let params: *mut FLT_PARAMETERS = params as _;
+
+    let irp_mj = (*(*data).Iopb).MajorFunction;
+    let irp_mj = core::mem::transmute::<u8, FltOperationType>(irp_mj);
+
     #[allow(invalid_reference_casting)]
     let params = &mut *params;
-    let params = FltParameters::new(
-        FltOperationType::from_irp_mj((*(*data).Iopb).MajorFunction),
-        params,
-    );
+    let params = FltParameters::new(irp_mj, params);
 
     let context = if completioncontext.is_null() {
         None

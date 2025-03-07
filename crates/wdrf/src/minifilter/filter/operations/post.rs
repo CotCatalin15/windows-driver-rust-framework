@@ -1,7 +1,3 @@
-use core::any::Any;
-
-use wdrf_std::kmalloc::TaggedObject;
-
 use crate::minifilter::filter::{params::FltParameters, FltCallbackData, FltRelatedObjects};
 
 use super::{FltPreOpCallback, PostOpContext};

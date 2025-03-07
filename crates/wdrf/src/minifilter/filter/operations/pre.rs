@@ -1,5 +1,3 @@
-use core::any::Any;
-
 use wdrf_std::kmalloc::TaggedObject;
 use windows_sys::Win32::Foundation::NTSTATUS;
 
@@ -7,7 +5,7 @@ use crate::minifilter::filter::{params::FltParameters, FltCallbackData, FltRelat
 
 use super::PostOpContext;
 
-pub enum PreOpStatus<C: 'static + Send + Sync + TaggedObject> {
+pub enum PreOpStatus<C: 'static + Send + TaggedObject> {
     Complete(NTSTATUS, usize),
     DisalowFastIO,
     Pending,
@@ -19,7 +17,7 @@ pub enum PreOpStatus<C: 'static + Send + Sync + TaggedObject> {
 
 pub trait FltPreOpCallback<'a> {
     type MinifilterContext: 'static + Sized + Sync + Send;
-    type PostContext: 'static + Sized + Sync + Send + TaggedObject;
+    type PostContext: 'static + Sized + Send + TaggedObject;
 
     fn call_pre(
         minifilter_context: &'a Self::MinifilterContext,

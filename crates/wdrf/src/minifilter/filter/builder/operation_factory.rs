@@ -2,10 +2,14 @@ use core::marker::PhantomData;
 
 use wdrf_std::{
     constants::PoolFlags,
-    kmalloc::{GlobalKernelAllocator, MemoryTag, TaggedObject},
+    kmalloc::{GlobalKernelAllocator, MemoryTag},
     vec::Vec,
+    NtResult, NtStatusError,
 };
-use windows_sys::Wdk::Storage::FileSystem::Minifilters::FLT_OPERATION_REGISTRATION;
+use windows_sys::{
+    Wdk::Storage::FileSystem::Minifilters::FLT_OPERATION_REGISTRATION,
+    Win32::Foundation::STATUS_NO_MEMORY,
+};
 
 use crate::minifilter::filter::{
     flt_op_callbacks::{generic_post_op_callback, generic_pre_op_callback},
@@ -35,10 +39,14 @@ where
         }
     }
 
-    pub fn preop<'a, Pre>(mut self, preop: Pre, entries: &[FltOperationEntry]) -> Self
+    pub fn preop<'a, Pre>(mut self, _preop: Pre, entries: &[FltOperationEntry]) -> NtResult<Self>
     where
         Pre: FltPreOpCallback<'a, MinifilterContext = C, PostContext = ()>,
     {
+        self.registration
+            .try_reserve(entries.len())
+            .map_err(|_| NtStatusError::Status(STATUS_NO_MEMORY))?;
+
         for entry in entries {
             self.registration.push(FLT_OPERATION_REGISTRATION {
                 PreOperation: Some(generic_pre_op_callback::<'a, Pre>),
@@ -47,17 +55,21 @@ where
             });
         }
 
-        self
+        Ok(self)
     }
 
     pub fn operation_with_postop<'a, Post>(
         mut self,
         _postop: Post,
         entries: &[FltOperationEntry],
-    ) -> Self
+    ) -> NtResult<Self>
     where
         Post: FltPostOpCallback<'a, MinifilterContext = C>,
     {
+        self.registration
+            .try_reserve(entries.len())
+            .map_err(|_| NtStatusError::Status(STATUS_NO_MEMORY))?;
+
         for entry in entries {
             self.registration.push(FLT_OPERATION_REGISTRATION {
                 PreOperation: Some(generic_pre_op_callback::<'a, Post>),
@@ -66,7 +78,11 @@ where
             });
         }
 
-        self
+        Ok(self)
+    }
+
+    pub fn build(self) -> NtResult<Self> {
+        Ok(self)
     }
 }
 
