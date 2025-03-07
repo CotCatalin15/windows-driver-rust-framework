@@ -1,12 +1,8 @@
-use core::{
-    any::Any,
-    ops::{Deref, DerefMut},
-};
+use core::ops::{Deref, DerefMut};
 
 use wdrf_std::{
     boxed::{Box, BoxExt},
-    constants::PoolFlags,
-    kmalloc::{GlobalKernelAllocator, MemoryTag, TaggedObject},
+    kmalloc::{GlobalKernelAllocator, TaggedObject},
 };
 
 /*
@@ -14,9 +10,9 @@ This can be implemented by keeping track of the tag etc etc i dont have time etc
 */
 
 #[repr(transparent)]
-pub struct PostOpContext<T: 'static + Send + Sync + TaggedObject>(Box<T>);
+pub struct PostOpContext<T: 'static + Send + TaggedObject>(Box<T>);
 
-impl<T: 'static + Send + Sync + TaggedObject> PostOpContext<T> {
+impl<T: 'static + Send + TaggedObject> PostOpContext<T> {
     pub fn try_create(value: T) -> anyhow::Result<Self> {
         Box::try_create_in(value, GlobalKernelAllocator::new_for_tagged::<T>()).map(|b| Self(b))
     }
@@ -31,9 +27,13 @@ impl<T: 'static + Send + Sync + TaggedObject> PostOpContext<T> {
             GlobalKernelAllocator::new_for_tagged::<T>(),
         ))
     }
+
+    pub fn unwrap(self) -> T {
+        Box::into_inner(self.0)
+    }
 }
 
-impl<T: 'static + Send + Sync + TaggedObject> Deref for PostOpContext<T> {
+impl<T: 'static + Send + TaggedObject> Deref for PostOpContext<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {

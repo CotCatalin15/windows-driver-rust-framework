@@ -7,42 +7,43 @@ use windows_sys::Wdk::Storage::FileSystem::Minifilters::FLT_PARAMETERS;
 
 #[repr(C)]
 #[allow(non_snake_case)]
-struct FltReadParameter {
+struct FltWriteParameter {
     pub Length: u32,
     pub Key: AsAligned<u32>, //aligned 8
     pub ByteOffset: i64,
-    pub ReadBuffer: *mut c_void,
+    pub WriteBuffer: *mut c_void,
     pub MdlAddress: *mut MDL,
 }
 
-pub struct FltReadFileRequest<'a> {
-    read: &'a FltReadParameter,
+#[repr(transparent)]
+pub struct FltWriteFileRequest<'a> {
+    write: &'a FltWriteParameter,
 }
 
-impl<'a> FltReadFileRequest<'a> {
+impl<'a> FltWriteFileRequest<'a> {
     pub fn new(params: &'a FLT_PARAMETERS) -> Self {
         unsafe {
-            let read_ptr = &params.Read as *const _ as *const FltReadParameter;
-            Self { read: &*read_ptr }
+            let write_ptr = &params.Write as *const _ as *const FltWriteParameter;
+            Self { write: &*write_ptr }
         }
     }
 
     pub fn len(&self) -> u32 {
-        self.read.Length
+        self.write.Length
     }
 
     pub fn offset(&self) -> i64 {
-        self.read.ByteOffset
+        self.write.ByteOffset
     }
 
-    pub fn user_read_buffer(&self) -> Option<&mut [u8]> {
+    pub fn user_write_buffer(&self) -> Option<&mut [u8]> {
         unsafe {
-            if self.read.ReadBuffer.is_null() {
+            if self.write.WriteBuffer.is_null() {
                 None
             } else {
                 Some(slice_from_raw_parts_mut_or_empty(
-                    self.read.ReadBuffer as _,
-                    self.read.Length as _,
+                    self.write.WriteBuffer as _,
+                    self.write.Length as _,
                 ))
             }
         }

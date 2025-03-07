@@ -2,12 +2,16 @@ use windows_sys::Wdk::Storage::FileSystem::Minifilters::FLT_PARAMETERS;
 
 use crate::minifilter::filter::registration::FltOperationType;
 
-use super::{FltCreateRequest, FltQueryFileRequest, FltReadFileRequest};
+use super::{
+    FltCloseFileRequest, FltCreateRequest, FltQueryFileRequest, FltReadFileRequest,
+    FltWriteFileRequest,
+};
 
 pub enum FltParameters<'a> {
     Create(FltCreateRequest<'a>),
-    QueryInformation(FltQueryFileRequest<'a>),
     Read(FltReadFileRequest<'a>),
+    Write(FltWriteFileRequest<'a>),
+    Close(FltCloseFileRequest),
 }
 
 impl<'a> FltParameters<'a> {
@@ -15,8 +19,10 @@ impl<'a> FltParameters<'a> {
         unsafe {
             match operation_type {
                 FltOperationType::Create => Self::Create(FltCreateRequest::new(params)),
-                FltOperationType::Query => Self::QueryInformation(FltQueryFileRequest::new(params)),
                 FltOperationType::Read => Self::Read(FltReadFileRequest::new(params)),
+                FltOperationType::Write => Self::Write(FltWriteFileRequest::new(params)),
+                FltOperationType::Close => Self::Close(FltCloseFileRequest),
+                _ => todo!(),
             }
         }
     }

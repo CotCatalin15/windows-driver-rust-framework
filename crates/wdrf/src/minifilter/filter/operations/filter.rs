@@ -1,5 +1,3 @@
-use crate::minifilter::filter::{FltRelatedObjects, FltVolumeType};
-
 #[derive(Debug, Clone, Copy)]
 pub enum UnloadStatus {
     Unload,

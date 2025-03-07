@@ -1,28 +1,19 @@
 use core::any::Any;
 
-use wdrf_std::{
-    boxed::{Box, BoxExt},
-    kmalloc::TaggedObject,
-    NtResult, NtStatusError,
-};
-use windows_sys::{
-    Wdk::{
-        Foundation::DRIVER_OBJECT,
-        Storage::FileSystem::Minifilters::{
-            FLT_REGISTRATION, FLT_REGISTRATION_VERSION, PFLT_FILTER_UNLOAD_CALLBACK,
-        },
+use wdrf_std::{kmalloc::TaggedObject, NtResult};
+use windows_sys::Wdk::{
+    Foundation::DRIVER_OBJECT,
+    Storage::FileSystem::Minifilters::{
+        FLT_REGISTRATION, FLT_REGISTRATION_VERSION, PFLT_FILTER_UNLOAD_CALLBACK,
     },
-    Win32::Foundation::{NOERROR, STATUS_NO_MEMORY},
 };
 
 use crate::{
     context::ContextRegistry,
     minifilter::filter::{
         flt_op_callbacks::flt_minifilter_unload_implementation,
-        framework::{
-            MinifilterContext, MinifilterContextAny, MinifilterFramework, GLOBAL_MINIFILTER,
-        },
-        registration, FilterUnload,
+        framework::{MinifilterContext, MinifilterFramework, GLOBAL_MINIFILTER},
+        FilterUnload,
     },
 };
 
@@ -35,24 +26,24 @@ where
     flags: u32,
     op_factory: I,
     minifilter_context: C,
-    unload: PFLT_FILTER_UNLOAD_CALLBACK,
+    unload_fnc: PFLT_FILTER_UNLOAD_CALLBACK,
 }
 
 impl<I> MinifilterFrameworkBuilder<I, ()>
 where
     I: IntoFltOpRegistrationFactory<MinifilterContext = ()>,
 {
-    pub fn new<F>(factory: F) -> Self
+    pub fn new<F>(factory: F) -> NtResult<Self>
     where
-        F: FnOnce() -> I,
+        F: FnOnce() -> NtResult<I>,
     {
-        let factorty = factory();
-        Self {
+        let factorty = factory()?;
+        Ok(Self {
             flags: 0,
             op_factory: factorty,
             minifilter_context: (),
-            unload: None,
-        }
+            unload_fnc: None,
+        })
     }
 }
 
@@ -61,21 +52,21 @@ where
     C: 'static + Send + Sync + TaggedObject + Any,
     I: IntoFltOpRegistrationFactory<MinifilterContext = C>,
 {
-    pub fn new_with_context<F>(factory: F, context: C) -> Self
+    pub fn new_with_context<F>(factory: F, context: C) -> NtResult<Self>
     where
-        F: FnOnce() -> I,
+        F: FnOnce() -> NtResult<I>,
     {
-        let factorty = factory();
-        Self {
+        let factorty = factory()?;
+        Ok(Self {
             flags: 0,
             op_factory: factorty,
             minifilter_context: context,
-            unload: None,
-        }
+            unload_fnc: None,
+        })
     }
 
     pub fn unload<F: FilterUnload<MinifilterContext = C>>(mut self, _unload: F) -> Self {
-        self.unload = Some(flt_minifilter_unload_implementation::<F>);
+        self.unload_fnc = Some(flt_minifilter_unload_implementation::<F>);
         self
     }
 
@@ -112,7 +103,7 @@ where
             registration_operations.as_ptr()
         };
         registration.ContextRegistration = core::ptr::null();
-        registration.FilterUnloadCallback = self.unload;
+        registration.FilterUnloadCallback = self.unload_fnc;
         //registration.InstanceSetupCallback = self.instance_setup;
         /*
         registration.InstanceQueryTeardownCallback = self.instance_query_teardown;
