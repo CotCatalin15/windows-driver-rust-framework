@@ -26,4 +26,6 @@ unsafe impl DispatchSafe for char {}
 unsafe impl DispatchSafe for isize {}
 unsafe impl DispatchSafe for usize {}
 
+unsafe impl<T: DispatchSafe> DispatchSafe for Option<T> {}
+
 //TODO: Add
