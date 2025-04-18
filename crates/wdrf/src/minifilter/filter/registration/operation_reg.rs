@@ -1,17 +1,27 @@
 use windows_sys::Wdk::{
     Storage::FileSystem::Minifilters::FLT_OPERATION_REGISTRATION,
-    System::SystemServices::{IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_READ, IRP_MJ_WRITE},
+    System::SystemServices::{
+        IRP_MJ_CLEANUP, IRP_MJ_CLOSE, IRP_MJ_CREATE, IRP_MJ_QUERY_INFORMATION, IRP_MJ_READ,
+        IRP_MJ_SET_INFORMATION, IRP_MJ_WRITE,
+    },
 };
 
 use crate::minifilter::structs::IRP_MJ_OPERATION_END;
 
+pub const IRP_MJ_ACQUIRE_FOR_SECTION_SYNCHRONIZATION: u32 =
+    unsafe { core::mem::transmute::<i8, u8>(-1i8) as u32 };
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FltOperationType {
-    Create = IRP_MJ_CREATE as _,
-    Read = IRP_MJ_READ as _,
-    Write = IRP_MJ_WRITE as _,
-    Close = IRP_MJ_CLOSE as _,
+    Create = IRP_MJ_CREATE as u8,
+    Read = IRP_MJ_READ as u8,
+    Write = IRP_MJ_WRITE as u8,
+    Cleanup = IRP_MJ_CLEANUP as u8,
+    Close = IRP_MJ_CLOSE as u8,
+    QueryFileInfo = IRP_MJ_QUERY_INFORMATION as u8,
+    SetFileInfo = IRP_MJ_SET_INFORMATION as u8,
+    AcquireForSectionSync = IRP_MJ_ACQUIRE_FOR_SECTION_SYNCHRONIZATION as u8,
 }
 
 pub struct FltOperationEntry {

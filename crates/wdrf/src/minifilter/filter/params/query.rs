@@ -1,34 +1,40 @@
-use wdrf_std::slice::slice_from_raw_parts_mut_or_empty;
 use windows_sys::{
-    Wdk::Storage::FileSystem::Minifilters::{FLT_PARAMETERS, FLT_PARAMETERS_19},
+    Wdk::Storage::FileSystem::Minifilters::FLT_PARAMETERS,
     Win32::System::WindowsProgramming::FILE_INFORMATION_CLASS,
 };
 
-pub struct FltQueryFileRequest<'a> {
-    query_params: &'a mut FLT_PARAMETERS_19,
+use wdrf_std::aligned::AsAligned;
+
+#[repr(C)]
+#[allow(non_snake_case)]
+pub struct FltQueryFileInformationParameter {
+    pub Length: u32,
+    pub FileInformationClass: AsAligned<FILE_INFORMATION_CLASS>,
+    pub InfoBuffer: *mut ::core::ffi::c_void,
 }
 
-impl<'a> FltQueryFileRequest<'a> {
-    pub unsafe fn new(params: &'a mut FLT_PARAMETERS) -> Self {
-        Self {
-            query_params: &mut params.QueryFileInformation,
-        }
-    }
+pub struct FltQueryFileInformationRequest<'a> {
+    param: &'a FltQueryFileInformationParameter,
+}
 
-    pub unsafe fn raw_query(&'a mut self) -> &'a mut FLT_PARAMETERS_19 {
-        self.query_params
-    }
-
-    pub fn class(&self) -> FILE_INFORMATION_CLASS {
-        self.query_params.FileInformationClass
-    }
-
-    pub fn buffer(&self) -> &'a mut [u8] {
+impl<'a> FltQueryFileInformationRequest<'a> {
+    pub fn new(params: &'a FLT_PARAMETERS) -> Self {
         unsafe {
-            slice_from_raw_parts_mut_or_empty(
-                self.query_params.InfoBuffer as _,
-                self.query_params.Length as _,
-            )
+            let query_ptr =
+                &params.QueryFileInformation as *const _ as *const FltQueryFileInformationParameter;
+            Self { param: &*query_ptr }
         }
+    }
+
+    pub fn length(&self) -> u32 {
+        self.param.Length
+    }
+
+    pub fn file_information_class(&self) -> FILE_INFORMATION_CLASS {
+        self.param.FileInformationClass.ptr
+    }
+
+    pub fn info_buffer(&self) -> *mut ::core::ffi::c_void {
+        self.param.InfoBuffer
     }
 }
