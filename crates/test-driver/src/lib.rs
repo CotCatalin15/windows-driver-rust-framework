@@ -1,4 +1,5 @@
 #![no_std]
+#![feature(core_intrinsics)]
 
 // This is fine because we don't actually have any floating point instruction in
 // our binary, thanks to our target defining soft-floats. fltused symbol is
@@ -20,7 +21,11 @@ use core::alloc::{GlobalAlloc, Layout};
 use core::panic::PanicInfo;
 
 use windows_sys::Wdk::Foundation::DRIVER_OBJECT;
-use windows_sys::Wdk::System::SystemServices::{DbgPrint, KeBugCheckEx};
+use windows_sys::Wdk::System::SystemServices::{
+    DbgPrint, KeBugCheckEx, KeDelayExecutionThread, KeWaitForSingleObject, KernelMode, KfRaiseIrql,
+    MmIsNonPagedSystemAddressValid, ProbeForRead, PsGetCurrentThreadTeb, DISPATCH_LEVEL,
+    PASSIVE_LEVEL,
+};
 use windows_sys::Win32::Foundation::{
     NTSTATUS, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING,
 };
@@ -42,41 +47,22 @@ static GLOBAL_ALLOCATOR: Allocator = Allocator;
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     unsafe {
-        //println!("[PANIC] called: {:#?}", info);
         KeBugCheckEx(0x1234, 0, 0, 0, 0);
         loop {}
     }
 }
 
-///# Safety
-///
-/// Driver entry point
-///
-///
-#[export_name = "DriverEntry"] // WDF expects a symbol with the name DriverEntry
+#[export_name = "DriverEntry"]
 pub unsafe extern "system" fn driver_entry(
     driver: &mut DRIVER_OBJECT,
-    registry_path: *const UNICODE_STRING,
+    _registry_path: *const UNICODE_STRING,
 ) -> NTSTATUS {
-    match driver_main(driver, &*registry_path) {
-        Ok(_) => STATUS_SUCCESS,
-        Err(_) => STATUS_UNSUCCESSFUL,
-    }
+    KfRaiseIrql(DISPATCH_LEVEL as _);
+
+    let ptr = 0xffffff1234 as *mut u32;
+    *ptr = 20;
+
+    STATUS_SUCCESS
 }
 
-fn driver_main(
-    driver: &mut DRIVER_OBJECT,
-    _registry_path: &'static UNICODE_STRING,
-) -> anyhow::Result<()> {
-    driver.DriverUnload = Some(driver_unload);
-
-    unsafe {
-        DbgPrint(c"Hello world".as_ptr() as _);
-    }
-
-    Ok(())
-}
-
-pub unsafe extern "system" fn driver_unload() {
-    DbgPrint(c"Bye world".as_ptr() as _);
-}
+unsafe extern "system" fn DriverUnload() -> () {}
